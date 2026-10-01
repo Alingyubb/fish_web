@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>數據預測</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/rwd.css') }}">
+
+  <style>
+    :root{
+      --bg:#0e1a2b; --panel:#172537; --accent:#00bfff; --text:#ffffff; --muted:#9bd1ff;
+      --wrap-maxw: 2400px;
+      --grid-cols: 2;
+      --grid-gap: 18px;
+      --top-h: 140px;
+    }
+
+    *{ box-sizing:border-box; }
+    html, body{ height:100%; }
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:"Segoe UI","Microsoft JhengHei",sans-serif;
+      overflow: hidden;
+    }
+
+    .header-bar{
+      display:flex; align-items:center; justify-content:space-between;
+      background:var(--panel); color:#fff; padding:10px 18px;
+      border-bottom:2px solid var(--accent); position:sticky; top:0; z-index:10;
+    }
+    .navs{ display:flex; gap:10px; align-items:center; }
+    .dashboard-title{ margin:0 auto; font-size:1.6rem; color:#fff; }
+
+    .nav-button a{
+      display: inline-block;
+      background: #007BFF;
+      color: #ffffff !important;
+      padding: 8px 12px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+    }
+    .nav-button a:hover{ background:#0056b3; }
+
+    /* 把「數據預測」這顆標成選中狀態 */
+    .nav-button.active a{
+      background: #00bfff;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.3), 0 4px 10px rgba(0,0,0,.4);
+    }
+
+    .pond-select-wrapper{
+      text-align:center; margin:10px 0 6px;
+    }
+    select{
+      background:#142132; color:#e8f6ff; border:1px solid rgba(0,191,255,.35);
+      border-radius:8px; padding:6px 10px; font-size:16px; outline:none;
+    }
+    select:focus{ border-color:var(--accent); }
+
+    .range-hint{
+      text-align:center;
+      color:var(--muted);
+      font-size:0.95rem;
+      margin-bottom:8px;
+    }
+
+    .wrap{
+      width: min(98vw, var(--wrap-maxw));
+      margin: 12px auto;
+      padding: 0 8px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(var(--grid-cols), minmax(0,1fr));
+      gap: var(--grid-gap);
+      max-width:100%;
+      margin:0 auto;
+    }
+
+    .chart-box{
+      background:#1f2d3d; padding:10px; border-radius:12px;
+      box-shadow:0 8px 22px rgba(0,0,0,.35), 0 0 0 1px rgba(0,191,255,.06) inset;
+      width:100%; min-width:0;
+      height: calc((100vh - var(--top-h) - (var(--grid-gap) + 32px)) / 2);
+      contain: layout paint size;
+    }
+
+    .chart-title{
+      font-size:1rem;
+      margin:0 0 4px 4px;
+      color:#e0f4ff;
+    }
+
+    .chart-box canvas{
+      display:block;
+      width:100% !important; height:100% !important;
+      background:#0e1a2b; border-radius:8px;
+    }
+
+    @media (max-width: 1200px){
+      body{ overflow:auto; }
+      .wrap{ width: 96vw; }
+      :root{ --grid-cols:1; }
+      .chart-box{ height: 48vh; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-bar">
+    <div class="navs">
+      <!--<div class="nav-button"><a href="/abnormal_summary">查看異常次數</a></div>-->
+      <div class="nav-button"><a href="/realtime_status">即時狀態</a></div>
+      <!--<div class="nav-button active"><a href="/data_prediction">數據預測</a></div>-->
+    </div>
+    <div class="dashboard-title">預測戰情室</div>
+    <div class="navs">
+      <div class="nav-button">
+        <a href="javascript:void(0)" onclick="gotoHistoryFromPred()">異常查看</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="pond-select-wrapper">
+    <label for="pondSelectPred">選擇魚池：</label>
+    <select id="pondSelectPred">
+      {% for pid in pond_ids %}
+        <option value="{{ pid }}" {% if pid == current_pond %}selected{% endif %}>{{ pid }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="wrap">
+    <div class="grid">
+      <div class="chart-box">
+        <canvas id="tempChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <canvas id="orpChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <canvas id="phChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <canvas id="doChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // 從後端來的資料
+  const chartData = {{ chart_data|tojson }};
+  const labels    = chartData.labels || [];
+  const real      = chartData.real   || {};
+  const pred      = chartData.pred   || {};
+
+  // 切換魚池：直接用 query string 重新載入
+  document.getElementById('pondSelectPred')?.addEventListener('change', (e) => {
+    const pid = e.target.value;
+    const u = new URL(window.location.href);
+    u.searchParams.set('pond_id', pid);
+    window.location.href = u.toString();
+  });
+
+  // ========== plugin：在預測區加底色 ==========
+  const shadeFuturePlugin = {
+    id: 'shadeFuture',
+    beforeDatasetsDraw(chart, args, pluginOptions) {
+      const futureStartIndex = pluginOptions.futureStartIndex;
+      if (futureStartIndex == null || futureStartIndex < 0) return;
+
+      const xScale = chart.scales.x;
+      const ca     = chart.chartArea;
+      if (!xScale || !ca) return;
+
+      const ctx    = chart.ctx;
+      const startX = xScale.getPixelForValue(futureStartIndex);
+      const endX   = ca.right;
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 0, 0.08)'; // 預測區淡黃色底
+      ctx.fillRect(startX, ca.top, endX - startX, ca.bottom - ca.top);
+      ctx.restore();
+    }
+  };
+
+  // ========== plugin：左上角「預測開始」小長方形 ==========
+  const forecastTagPlugin = {
+    id: 'forecastTag',
+    afterDraw(chart, args, pluginOptions) {
+      const futureStartIndex = pluginOptions.futureStartIndex;
+      if (futureStartIndex == null || futureStartIndex < 0) return;
+
+      const xScale = chart.scales.x;
+      const ca     = chart.chartArea;
+      if (!xScale || !ca) return;
+
+      const ctx   = chart.ctx;
+      const xPos  = xScale.getPixelForValue(futureStartIndex);
+      const label = pluginOptions.label || '預測開始';
+
+      const fontSize = pluginOptions.fontSize || 12;
+      const paddingX = 6;
+      const paddingY = 4;
+      const radius   = pluginOptions.borderRadius || 6;
+
+      ctx.save();
+      ctx.font = `${fontSize}px "Microsoft JhengHei", sans-serif`;
+      const textWidth  = ctx.measureText(label).width;
+      const rectWidth  = textWidth + paddingX * 2;
+      const rectHeight = fontSize + paddingY * 2;
+
+      // 讓小標籤不要超出左右邊界
+      let rectX = xPos - rectWidth / 2;
+      const rectY = ca.top + 6;
+      if (rectX < ca.left) rectX = ca.left + 2;
+      if (rectX + rectWidth > ca.right) rectX = ca.right - rectWidth - 2;
+
+      // 畫圓角長方形
+      ctx.fillStyle = pluginOptions.backgroundColor || 'rgba(255,77,77,0.96)';
+      const r = radius;
+      ctx.beginPath();
+      ctx.moveTo(rectX + r, rectY);
+      ctx.lineTo(rectX + rectWidth - r, rectY);
+      ctx.quadraticCurveTo(rectX + rectWidth, rectY, rectX + rectWidth, rectY + r);
+      ctx.lineTo(rectX + rectWidth, rectY + rectHeight - r);
+      ctx.quadraticCurveTo(rectX + rectWidth, rectY + rectHeight, rectX + rectWidth - r, rectY + rectHeight);
+      ctx.lineTo(rectX + r, rectY + rectHeight);
+      ctx.quadraticCurveTo(rectX, rectY + rectHeight, rectX, rectY + rectHeight - r);
+      ctx.lineTo(rectX, rectY + r);
+      ctx.quadraticCurveTo(rectX, rectY, rectX + r, rectY);
+      ctx.closePath();
+      ctx.fill();
+
+      // 文字
+      ctx.fillStyle = pluginOptions.color || '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, rectX + rectWidth / 2, rectY + rectHeight / 2);
+      ctx.restore();
+    }
+  };
+
+  // ========== 把實際 / 預測拆成兩條線，並找出預測起點 ==========
+  function buildSeries(realData, predData) {
+    const r = realData || [];
+    const p = predData || [];
+    const n = labels.length;
+
+    const actualArr = new Array(n).fill(null);
+    const predArr   = new Array(n).fill(null);
+    let firstPredIdx = -1;
+    let lastRealIdx  = -1;
+
+    for (let i = 0; i < n; i++) {
+      const rv = r[i];
+      const pv = p[i];
+
+      if (rv !== null && rv !== undefined) {
+        actualArr[i] = rv;
+        lastRealIdx = i;
+      }
+      if (pv !== null && pv !== undefined) {
+        predArr[i] = pv;
+        if (firstPredIdx === -1) firstPredIdx = i;
+      }
+    }
+
+    // 讓實際線在第一個預測點也有值，線會接起來
+    if (firstPredIdx > 0 && lastRealIdx >= 0 && firstPredIdx > lastRealIdx) {
+      if (predArr[firstPredIdx] != null && actualArr[firstPredIdx] == null) {
+        actualArr[firstPredIdx] = predArr[firstPredIdx];
+      }
+    }
+
+    return { actualArr, predArr, firstPredIdx };
+  }
+
+  // colors: { actualLine, predLine }
+  function createPredChart(ctx, realData, predData, chartTitle, colors) {
+    const { actualArr, predArr, firstPredIdx } = buildSeries(realData, predData);
+
+    return new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            // 實際值
+            label: '實際值（過去 30 分鐘）',
+            data: actualArr,
+            borderColor: colors.actualLine,
+            backgroundColor: colors.actualLine,
+            tension: 0.3,
+            spanGaps: true,
+            pointBackgroundColor: colors.actualLine,
+            pointBorderColor: colors.actualLine,
+            pointRadius: (ctx) => {
+              const idx = ctx.dataIndex;
+              if (actualArr[idx] == null) return 0;
+              return idx % 3 === 0 ? 3 : 0;     // 只畫每 3 個點（保持你原本邏輯）
+            },
+            pointHitRadius: 10,
+            pointHoverRadius: 6
+          },
+          {
+            // 預測值
+            label: '預測值（未來 1 小時）',
+            data: predArr,
+            borderColor: colors.predLine,
+            backgroundColor: colors.predLine,
+            tension: 0.3,
+            spanGaps: true,
+            pointBackgroundColor: colors.predLine,
+            pointBorderColor: colors.predLine,
+            pointRadius: (ctx) => {
+              const idx = ctx.dataIndex;
+              if (predArr[idx] == null) return 0;
+              return idx % 3 === 0 ? 4 : 0;     // 預測點稍微大一點
+            },
+            pointHitRadius: 10,
+            pointHoverRadius: 7
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        spanGaps: true,
+        scales: {
+          x: {
+            type: 'category',
+            offset: true,
+            ticks: {
+              color: '#fff',
+              maxRotation: 0,
+              minRotation: 0,
+              font: { size: 14 }
+            },
+            grid: { color: '#444' }
+          },
+          y: {
+            beginAtZero: false,
+            ticks: {
+              color: '#fff',
+              font: { size: 14 }
+            },
+            grid: { color: '#444' }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: { color: '#fff', font:{ size: 13 } }
+          },
+          title: {
+            display: true,
+            text: chartTitle,
+            color: '#fff',
+            font: { size: 16, weight: 'bold' }
+          },
+          tooltip: {
+            callbacks: {
+              title: (items) => {
+                if (!items.length) return '';
+                const idx = items[0].dataIndex;
+                return labels[idx] || '';
+              },
+              label: (ctx) => {
+                const isPred = ctx.datasetIndex === 1;
+                const prefix = isPred ? '預測值' : '實際值';
+                const v = ctx.parsed.y;
+                if (v == null) return '';
+                return `${prefix}: ${v}`;
+              }
+            }
+          },
+          // 告訴 shadeFuture / forecastTag 從哪裡開始
+          shadeFuture: {
+            futureStartIndex: firstPredIdx
+          },
+          forecastTag: {
+            futureStartIndex: firstPredIdx,
+            label: '預測開始',
+            backgroundColor: 'rgba(255,77,77,0.96)',
+            color: '#ffffff',
+            fontSize: 12,
+            borderRadius: 6
+          }
+        }
+      },
+      // 這裡註冊兩個 plugin
+      plugins: [shadeFuturePlugin, forecastTagPlugin]
+    });
+  }
+  // 跳轉頁面
+    // 把 Date 轉成 "YYYY-MM-DD HH:MM:SS"
+  function toMysqlStr(d){
+    const yyyy = d.getFullYear();
+    const mm   = String(d.getMonth()+1).padStart(2,'0');
+    const dd   = String(d.getDate()).padStart(2,'0');
+    const HH   = String(d.getHours()).padStart(2,'0');
+    const MM   = String(d.getMinutes()).padStart(2,'0');
+    const SS   = String(d.getSeconds()).padStart(2,'0');
+    return `${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS}`;
+  }
+
+  // 從「預測頁」跳到數據查看：時間 = 現在往前推 1 小時
+  function gotoHistoryFromPred(){
+    // 如果你有下拉選單 <select id="pondSelectPred">Pond A/B/C...</select>
+    const sel = document.getElementById('pondSelectPred');
+    const pondId = sel ? sel.value : '';  // 例如 "Pond A"
+
+    const now       = new Date();
+    const startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 往前 1 小時
+
+    const start = toMysqlStr(startDate);
+    const end   = toMysqlStr(now);
+
+    const url = `/history_result`
+      + `?pond_id=${encodeURIComponent(pondId)}`
+      + `&start=${encodeURIComponent(start)}`
+      + `&end=${encodeURIComponent(end)}`
+      + `&abnormal_type=data`;   // 從預測來通常看「數據異常」
+
+    window.location.href = url;
+  }
+
+  // 顏色設定：貼近歷史趨勢那一頁
+  const COLORS = {
+    temp: { actualLine: '#ff6b81', predLine: '#ffb3c1' },   // 粉紅
+    orp:  { actualLine: '#a97aff', predLine: '#d0b3ff' },   // 紫
+    ph:   { actualLine: '#ffc233', predLine: '#ffe08a' },   // 黃
+    do:   { actualLine: '#2ed0d0', predLine: '#8be6e6' }    // 青
+  };
+
+  const tempChart = createPredChart(
+    document.getElementById('tempChart'),
+    real.temperature || [],
+    pred.temperature || [],
+    '溫度預測 (°C)',
+    COLORS.temp
+  );
+
+  const orpChart = createPredChart(
+    document.getElementById('orpChart'),
+    real.orp || [],
+    pred.orp || [],
+    'ORP 預測 (mV)',
+    COLORS.orp
+  );
+
+  const phChart = createPredChart(
+    document.getElementById('phChart'),
+    real.ph || [],
+    pred.ph || [],
+    'pH 預測',
+    COLORS.ph
+  );
+
+  const doChart = createPredChart(
+    document.getElementById('doChart'),
+    real.do_level || [],
+    pred.do_level || [],
+    '溶氧預測 (mg/L)',
+    COLORS.do
+  );
+</script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+python ingest_lastrecord
+python simulate_behavior_event.py

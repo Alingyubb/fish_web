@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>歷史資料查詢結果</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0e1a2b; --panel:#172537;
+      --accent:#00bfff; --text:#ffffff; --muted:#9bd1ff;
+      --line: rgba(0,191,255,.18);
+      --line-soft: rgba(0,191,255,.10);
+      --ok:#42d77d;  --ok-soft: rgba(66,215,125,.15);
+      --grid-strong: #00bcd4;
+    }
+    body{
+      min-height:100vh;            /* ✅ 允許內容變長 */
+      height:auto;                 /* ✅ 不鎖死 100vh */
+      display:grid;
+      grid-template-rows:auto 1fr;
+      overflow-y:auto;             /* ✅ 頁面可以上下捲 */
+      background:var(--bg); color:var(--text); margin:0;
+      font-family:"Segoe UI",sans-serif;
+      /*overflow:hidden;*/
+    }
+
+    .header-bar{
+      display:flex; align-items:center; justify-content:space-between;
+      background:var(--panel); color:#fff; padding:10px 18px;
+      border-bottom:2px solid var(--accent); position:sticky; top:0; z-index:10;
+    }
+    .dashboard-title{
+      font-size:1.6rem;
+      padding:14px 0;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-shadow: 0 0 18px rgba(0,191,255,.25);
+      white-space: nowrap;
+    }
+
+    .nav-btn{
+      background:#007BFF; color:#fff; padding:8px 12px;
+      border-radius:10px; text-decoration:none; font-weight:600;
+      box-shadow:0 2px 6px rgba(0,0,0,.3);
+    }
+    .nav-btn:hover{ background:#0056b3; }
+
+    .wrap{
+      width: min(96vw, 1600px);
+      margin:16px auto; padding:0 8px;
+      display:flex; flex-direction:column; min-height:0;
+      font-size:1.35rem;
+      min-height:0;
+    }
+    .range{ color:var(--muted); margin:8px 0 12px; }
+
+    .card{
+      background:var(--panel);
+      box-shadow:0 10px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(0,191,255,.06) inset;
+    }
+    .card.table-card{ flex:0 0 auto; display:flex; flex-direction:column; min-height:0; }
+    .table-responsive{
+      flex: 1 1 auto;               /* ⭐ 填滿 card */
+      overflow-x: auto;
+      overflow-y: visible;             /* ⭐ 關鍵：桌機也能上下捲 */
+      min-height: 0;
+    }
+
+
+    .table-neo{ width:100%; border-collapse: separate !important; border-spacing:0; table-layout:fixed; }
+    /* 表頭 th：背景同色、置中、垂直置中、sticky */
+    .table.table-neo > thead > tr > th{
+      background-color: #00BCD4 !important;
+      color: #eaffff !important;
+      font-weight: 700;
+      text-align: center;
+      vertical-align: middle;
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      padding: 10px;
+    }
+
+    .table-neo td{ padding:9px 10px; text-align:center; }
+
+    /* ✅ 移除表格底部預設 margin，避免 table-responsive 內出現空白 */
+    .table-responsive > .table{
+      margin-bottom: 0 !important;
+    }
+
+    /* ✅ 保險：把 wrapper 自己的底部 padding/margin 也清掉 */
+    .table-responsive{
+      padding-bottom: 0 !important;
+      margin-bottom: 0 !important;
+    }
+
+    .tag{ display:inline-block; padding:4px 10px; border-radius:999px; font-size:1rem; margin:0 4px 4px 0; }
+    .tag-ok{ background:#16a34a1a; color:#8bffb0; border:1px solid #16a34a55; }
+    .tag-warn{ background:#ef44441a; color:#ff9aa7; border:1px solid #ef444455; }
+
+    .btn-small{ padding:4px 10px; border-radius:8px; font-size:.9rem; }
+
+    .pagination-wrap{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; }
+    .pager{ display:flex; gap:6px; flex-wrap:wrap; }
+    .pager a, .pager span{
+      padding:6px 10px; border:1px solid var(--line); border-radius:10px;
+      text-decoration:none; color:#e8f6ff; background:#142132;
+    }
+    .pager a:hover{ background:#193049; }
+
+    .form-select, .form-control{ background:#142132; color:#e8f6ff; border-color:var(--line); }
+    .form-select:focus, .form-control:focus{ box-shadow:none; border-color:var(--accent); }
+
+    /* 篩選異常種類這一列放大一點 */
+    .filter-row{ font-size: 1.5rem; }
+    .filter-row .form-select-sm{
+      font-size:1.5rem;
+      padding: 6px 10px;
+      height: auto;
+    }
+
+    .pagerbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:10px 12px;
+    }
+
+    .page-links{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+
+    .page-btn, .page-num{
+      padding:6px 10px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      text-decoration:none;
+      color:#e8f6ff;
+      background:#142132;
+    }
+
+    .page-btn:hover, .page-num:hover{ background:#193049; }
+
+    .page-num.active{
+      background:#0b2a46;
+      border-color: var(--accent);
+      font-weight:700;
+    }
+
+    .page-btn.disabled{
+      opacity:.5;
+      cursor:not-allowed;
+    }
+
+    .page-ellipsis{
+      color: var(--muted);
+      padding:0 4px;
+    }
+
+    .page-jump{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex:0 0 auto;
+    }
+
+    .page-label{ font-size:1.35rem; color: var(--muted); }
+
+    .page-input{
+      width:72px;
+      background:#142132;
+      color:#e8f6ff;
+      border:1px solid var(--line);
+      border-radius:8px;
+      padding:4px 8px;
+    }
+
+    .page-go{
+      padding:6px 12px;
+      border-radius:10px;
+      border:1px solid var(--line);
+      background:#142132;
+      color:#e8f6ff;
+    }
+
+    .page-go:hover{ background:#193049; }
+
+    /* ✅ 分頁：該頁含「未處理」→ 頁碼紅色提示 */
+    .page-num.page-unhandled{
+      border-color: rgba(255, 60, 60, .65);
+      background: rgba(255, 60, 60, .12);
+      color: #ffb3b3;
+      font-weight: 800;
+    }
+
+    /* 若當前頁剛好也有未處理：保留 active 的同時也顯示紅提示 */
+    .page-num.active.page-unhandled{
+      box-shadow: 0 0 0 2px rgba(255,60,60,.25) inset;
+    }
+
+    .range-mini{
+      color: var(--muted);
+      margin:8px 0 0;
+      text-align:right;
+    }
+
+    /* 漢堡按鈕 */
+    .hamburger-btn {
+      padding: 6px;
+      color: var(--muted);
+      border: 1px solid transparent;
+    }
+    .hamburger-btn:hover {
+      color: var(--text);
+      background-color: rgba(255,255,255,0.1);
+    }
+
+    /* 表格 */
+    .abnormal-card{ border-radius:6px;  }
+
+    .status-badge{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      max-width: 100%;
+      padding: 6px 10px;
+      text-align: center;
+
+      white-space: normal;     /* ✅ 允許換行 */
+      word-break: break-word;  /* ✅ 長字強制斷行 */
+      line-height: 1.15;       /* ✅ 避免行距讓它看起來溢出 */
+    }
+
+    /* 處理狀態可點按鈕外觀 */
+    .status-toggle{
+      border:none;
+      background:transparent;
+      cursor:pointer;
+      padding:0 10px;
+    }
+    .status-toggle:focus{
+      outline:none;
+      box-shadow:0 0 0 2px rgba(0,191,255,.4);
+    }
+
+    .no-data-cell{
+      color:#ffffff !important;
+      background:#19263a;
+    }
+    .no-data-row td{ border-top:1px solid var(--line-soft); }
+
+    .filter-input {
+      height: 48px;
+      font-size: 1.35rem;
+      padding: 6px 12px;
+      border-radius: 10px;
+    }
+    .filter-btn {
+      height: 48px;
+      font-size: 1.3rem;
+      padding: 6px 20px;
+      border-radius: 10px;
+      flex: 0 0 auto;
+    }
+    .filter-group {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      align-items: center;
+      column-gap: 8px;                        /* ✅ 控制 label 與右邊距離 */
+      white-space: nowrap;                    /* ✅ label 這組不換行 */
+    }
+    
+
+    /* 放大紀錄影片的彈出視窗 */
+    #videoModal .modal-dialog.video-modal-dialog{ max-width: 90vw; }
+    #videoModal .modal-body{ padding: 8px; }
+    #recVideo{
+      width: 100%;
+      max-height: 80vh;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+
+
+    /* ===== highlight_ts：青色閃爍 ===== */
+    @keyframes blink-highlight {
+      0%, 100% { background-color: transparent; }
+      50%      { background-color: rgba(0,188,212,0.35); }
+    }
+    .highlight-blink td{
+      animation: blink-highlight 0.8s ease-in-out 3;
+    }
+
+    /* ✅ 紅色閃爍（跟青色 highlight 同型） */
+    /* ✅ 未處理：先呼吸 3 次，結束後停在最大亮度紅底 */
+    @keyframes blink-unhandled-red {
+      0%   { background-color: rgba(255, 60, 60, 0.12); }
+      50%  { background-color: rgba(255, 60, 60, 0.30); } /* 最大亮度 */
+      100% { background-color: rgba(255, 60, 60, 0.30); } /* ✅ 結束也維持最大亮度 */
+    }
+
+    /* ✅ 常駐紅底（就算動畫沒跑也要紅） */
+    tr.row-unhandled > td{
+      background-color: rgba(255, 60, 60, 0.30);
+      animation: blink-unhandled-red 0.9s ease-in-out 3 forwards !important;
+    }
+
+    @media (min-width: 992px){
+      .wrap{ font-size: 1.28rem; }          /* 原本 1.35rem */
+      .filter-row{ font-size: 1.5rem; }     /* 原本 1.5rem */
+
+      /*.filter-input{ height: 40px; font-size: 1.05rem; }
+      .filter-btn{ height: 40px; font-size: 1.05rem; padding: 6px 16px; }*/
+    } 
+
+    @media (max-width: 992px) {
+      .wrap { width: 96vw; margin: 16px auto; }
+      .header-bar { padding: 10px 15px; }
+    }
+    /* 手機版 */
+    /* 手機版：做出「比例縮小」的感覺 + 讓表格一定看得到 */
+    @media (max-width: 768px){
+      
+      /* 1) 整體字體跟著螢幕縮（像 dashboard 的感覺） */
+      .wrap{
+        width: 96vw;
+        margin: 12px auto;
+        font-size: clamp(14px, 3.4vw, 18px); /* ✅ 視覺等比縮小感 */
+      }
+
+      .dashboard-title{
+        font-size: clamp(20px, 6vw, 28px);
+        padding: 10px 0;
+      }
+
+      /* 2) 篩選列：改成「可換行」且每個欄位滿版 */
+      .filter-row{
+        font-size: inherit;           /* 不要再硬放大到 1.5rem */
+        gap: 6px !important;
+      }
+
+      .filter-row form{
+        width: 100%;
+        display: grid !important;
+        grid-template-columns: 1fr;   /* ✅ 一欄 */
+        gap: 6px;
+      }
+
+      /* 每個欄位容器都讓它滿版 */
+      .filter-row form > div{
+        width: 100%;
+      }
+
+      /* 3) 解除 nowrap，不然手機會被撐爆 */
+      .filter-group{
+        width: 100%;
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        align-items: center;
+        gap: 6px;
+
+        /* ✅ 重點：label 不換行 */
+        white-space: nowrap;
+      }
+
+      .filter-group label{
+        white-space: nowrap;
+        margin: 0 !important;
+      }
+      .filter-row select.form-select{
+        font-size: 14px !important;  /* 你現在顯示 24px，這行直接壓下去 */
+        padding: 2px 8px !important; /* 減少左右/上下 padding */
+        height: 36px !important;     /* 控制整體高度 */
+        line-height: 1.2 !important;
+      }
+        /* 開始/結束（日期時間 input） */
+      .filter-row input{
+        font-size: 14px !important;
+        padding: 2px 8px !important;
+        height: 36px !important;
+        line-height: 1.2 !important;
+      }
+
+      /* 如果你有用 flatpickr（常見），保險再補一條 */
+      .filter-row input.flatpickr-input{
+        font-size: 14px !important;
+        padding: 2px 8px !important;
+        height: 36px !important;
+        line-height: 1.2 !important;
+      }
+
+      .filter-row input,
+      .filter-row select{
+        min-width: 0; /* ✅ 讓右邊真的可以縮，不要反擠 label */
+      }
+
+
+      /* 5) 套用按鈕滿版 */
+      .filter-row .filter-btn{
+        width: 100%;
+        height: 36px;
+        font-size: inherit;
+        border-radius: 10px;
+      }
+
+      /* 6) 表格：給它「至少」一個可視高度，且能捲 */
+      .card.table-card{
+        min-height: auto !important;
+        height: auto !important;
+        flex: 0 0 auto !important;
+      }
+
+      .table-responsive{
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible;
+        flex: 0 0 auto !important;
+      }
+      .range{
+        width: 100%;
+        text-align: center;
+      }
+
+      /* 7) 分頁區：pager、range 各一行；兩顆按鈕同一列 */
+      .pagination-wrap{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .pagination-wrap .pagerbar{
+        flex: 1 1 100%;        /* ✅ 第一行：pagerbar */
+        width: 100%;
+      }
+
+      .range{
+        flex: 1 1 100%;          /* 第二行：共幾筆/第幾頁 */
+        width: 100%;
+        text-align: center;
+      }
+
+      /* 第三行：兩顆按鈕同一列 */
+      #toggleFilterBtn,
+      #btnHandlerDetail{
+        flex: 1 1 0;
+        min-width: 0;
+        height: 44px;
+        white-space: nowrap;
+      }
+
+      /* 收合時顯示 toggle */
+      .filters-collapsed #toggleFilterBtn{
+        display: block !important;
+      }
+
+      /* 整張表的字體縮小 */
+      .table-neo th,
+      .table-neo td{
+        font-size: 13px;
+        padding: 8px 6px;      /* 原本通常 12~16px，縮小後不會那麼高 */
+        line-height: 1.2;
+      }
+
+      /* 表頭再小一點，避免佔高度 */
+      .table-neo thead th{
+        font-size: 13px;
+        padding: 10px 6px;
+      }
+
+      /* pH/ORP 的 tag 縮小，避免把列撐高 */
+      .table-neo .tag{
+        font-size: 12px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        margin: 0 4px 4px 0;
+      }
+
+      /* 「已通知/未處理」那種狀態 tag 也縮小 */
+      .table-neo .status-badge,
+      .table-neo .notify-tag,
+      .table-neo .handle-tag{
+        font-size: 12px;
+        padding: 3px 8px;
+        line-height: 1.1;
+      }
+
+      /* 如果 Pond A/B 也想不要斷太多行 */
+      .table-neo td{
+        white-space: normal;
+        word-break: break-word;
+      }
+
+      .table-neo th:nth-child(1), .table-neo td:nth-child(1){ width:16%; }
+      .table-neo th:nth-child(2), .table-neo td:nth-child(2){ width:15%; }
+      .table-neo th:nth-child(3), .table-neo td:nth-child(3){ width:18%; }
+      .table-neo th:nth-child(4), .table-neo td:nth-child(4){ width:15%; }
+      .table-neo th:nth-child(5), .table-neo td:nth-child(5){ width:15%; }
+      .table-neo th:nth-child(6), .table-neo td:nth-child(6){ width:21%; }
+
+      .pagination-wrap #toggleFilterBtn,
+      .pagination-wrap #btnHandlerDetail{
+        width: auto !important;   /* ✅ 取消被 filter-btn 強制 100% 的影響 */
+      }
+
+      /* 展開時隱藏 toggle，但處理詳情要滿版（避免留空白） */
+      body:not(.filters-collapsed) #toggleFilterBtn{
+        display: none !important;
+      }
+      body:not(.filters-collapsed) #btnHandlerDetail{
+        flex: 1 1 100%;
+      }
+        /* ✅ 分頁區：調整時間範圍 + 處理詳情 兩顆按鈕也縮小 */
+      .pagination-wrap #toggleFilterBtn,
+      .pagination-wrap #btnHandlerDetail{
+        font-size: 13px;       /* 跟 pagerbar 一樣 */
+        height: 36px;          /* 你想更矮可用 34px */
+        padding: 4px 10px;
+        border-radius: 8px;    /* 跟 page-num 的圓角一致 */
+        line-height: 1.1;
+
+        /* 保險：避免被其他規則撐大或滿版 */
+        width: auto !important;
+        min-width: 0;
+        white-space: nowrap;
+      }
+      /* 這一塊整體字體縮小（只影響分頁工具列） */
+      .pagination-wrap .pagerbar{
+        font-size: 13px;          /* 你想更小可改 12px */
+        padding: 8px 10px;        /* 外框內距縮小 */
+        gap: 8px;
+      }
+
+      /* 左側頁碼區：縮小間距 */
+      .pagination-wrap .page-links{
+        gap: 4px;
+      }
+
+      /* 箭頭與頁碼：縮小按鈕、邊框、圓角 */
+      .pagination-wrap .page-btn,
+      .pagination-wrap .page-num{
+        padding: 4px 8px;         /* ✅ 按鈕變小 */
+        border-width: 1px;        /* ✅ 邊框粗細（想更淡可加 border-color） */
+        border-radius: 8px;       /* ✅ 圓角縮小（原本可能 10px） */
+        font-size: 13px;          /* ✅ 保險，避免被外層撐大 */
+        line-height: 1.1;
+      }
+
+      /* 省略號 */
+      .pagination-wrap .page-ellipsis{
+        font-size: 13px;
+        padding: 0 2px;
+      }
+
+      /* 右側 Page / input / Go：縮小 */
+      .pagination-wrap .page-jump{
+        gap: 6px;
+      }
+
+      .pagination-wrap .page-label{
+        font-size: 13px;
+      }
+
+      .pagination-wrap .page-input{
+        width: 56px;              /* ✅ input 變窄 */
+        padding: 3px 6px;
+        font-size: 13px;
+        border-radius: 8px;
+        border-width: 1px;
+      }
+
+      .pagination-wrap .page-go{
+        padding: 4px 10px;
+        font-size: 13px;
+        border-radius: 8px;
+        border-width: 1px;
+      }
+    
+      /*.pagerbar{
+        flex-direction:column;
+        align-items:stretch;
+      }
+      .page-jump{
+        justify-content:flex-end;
+        width:100%;
+      }*/
+        /* ✅ 收合時：把整個時間/條件區塊藏起來 */
+      .filters-collapsed #filterPanel{
+        display: none !important;
+      }
+
+      /* ✅ 收合時才顯示「調整時間範圍」 */
+      .filters-collapsed #toggleFilterBtn{
+        display: block !important;
+      }
+
+      /* ✅ 展開時隱藏 toggle */
+      body:not(.filters-collapsed) #toggleFilterBtn{
+        display: none !important;
+      }
+    }   
+  </style>
+</head>
+
+<body>
+  <!-- 側邊 offcanvas 導覽 -->
+  <div class="offcanvas offcanvas-start text-bg-dark" tabindex="-1" id="mobileNav" aria-labelledby="mobileNavLabel">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="mobileNavLabel">功能選單</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="d-flex flex-column gap-3">
+        <a class="nav-btn text-center" href="/pond_cycle">趨勢分析</a>
+        <a class="nav-btn text-center" href="/realtime_status">即時狀態</a>
+        <a class="nav-btn text-center" href="#" id="toHistoryBtnMobile">異常查看</a>
+        <a class="nav-btn text-center" href="/ar_remote">遠端協作</a>
+        <a class="nav-btn text-center" href="/system_settings">門檻設定</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 上方主選單列 -->
+  <div class="header-bar">
+    <button class="btn d-lg-none hamburger-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNav">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+        <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+      </svg>
+    </button>
+
+    <div class="d-none d-lg-flex gap-2">
+      <a class="nav-btn" href="/pond_cycle">趨勢分析</a>
+      <a class="nav-btn" href="/realtime_status">即時狀態</a>
+      <a class="nav-btn" href="/ar_remote">遠端協作</a>
+      <!--<a class="nav-btn" href="/data_prediction">數據預測</a>-->
+    </div>
+
+    <div class="dashboard-title">異常查看</div>
+
+    <div class="d-none d-lg-flex gap-2">
+      <a class="nav-btn" href="/history_result">異常查看</a>
+      <a class="nav-btn" href="/system_settings">門檻設定</a>
+    </div>
+
+    <div class="d-lg-none" style="width: 40px; visibility: hidden;"></div>
+  </div>
+
+  <div class="wrap">
+    
+
+    <!-- 篩選異常種類 -->
+    <div class="d-flex align-items-center mb-3 gap-3 filter-row flex-wrap">
+      <form method="get" action="{{ url_for('history_result') }}"
+            class="d-flex align-items-center gap-3 flex-wrap">
+
+        <!-- 魚池選擇 -->
+        <div class="d-flex align-items-center gap-2">
+          <label class="me-1">魚池：</label>
+          <select name="pond_id" class="form-select form-select-sm" style="width: 150px;">
+            <option value="">全部魚池</option>
+            <option value="Pond A" {% if pond_id=='Pond A' %}selected{% endif %}>Pond A</option>
+            <option value="Pond B" {% if pond_id=='Pond B' %}selected{% endif %}>Pond B</option>
+            <option value="Pond C" {% if pond_id=='Pond C' %}selected{% endif %}>Pond C</option>
+          </select>
+        </div>
+
+        <!-- 異常種類 -->
+        <div class="d-flex align-items-center gap-2">
+          <label class="me-1">異常種類：</label>
+          <select id="abnormalType" name="abnormal_type"
+                  class="form-select form-select-sm"
+                  style="width: 180px;">
+            <option value="all"      {% if abnormal_type == 'all' %}selected{% endif %}>全部顯示</option>
+            <option value="behavior" {% if abnormal_type == 'behavior' %}selected{% endif %}>行為異常</option>
+            <option value="data"     {% if abnormal_type == 'data' %}selected{% endif %}>數據異常</option>
+            <option value="leftover" {% if abnormal_type == 'leftover' %}selected{% endif %}>殘料異常</option>
+          </select>
+        </div>
+
+        <!-- 開始時間 -->
+        <div class="filter-group">
+          <label class="filter-label">開始：</label>
+          <input type="datetime-local"
+                 name="start"
+                 class="form-control filter-input"
+                 value="{{ start.replace(' ', 'T') }}">
+        </div>
+
+        <!-- 結束時間 -->
+        <div class="filter-group">
+          <label class="filter-label">結束：</label>
+          <input type="datetime-local"
+                 name="end"
+                 class="form-control filter-input"
+                 value="{{ end.replace(' ', 'T') }}">
+        </div>
+
+        <!-- 隱藏欄位 -->
+        <input type="hidden" name="page" value="1">
+        <input type="hidden" name="page_size" value="{{ page_size }}">
+
+        <!--<button type="submit" class="btn btn-primary filter-btn">套用</button>-->
+      </form>
+    </div>
+
+    <!-- 主表格 -->
+    <div class="card table-card abnormal-card">
+      <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle table-neo abnormal-table">
+          <thead>
+            <tr>
+              <th>時間</th>
+              <th>魚池</th>
+              <th>內容</th>
+              <th>影片</th>
+              <th>通知狀態</th>
+              <th>處理狀態</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% set behavior_ns = namespace(count=0) %}
+            {% if rows2 %}
+              {% for r in rows2 %}
+              <tr data-ts="{{ r.ts }}"
+                  class="{% if (r.status or '未處理') == '未處理' %}row-unhandled{% endif %}">
+                <!-- 時間 -->
+                <td data-label="時間">{{ r.ts }}</td>
+
+                <!-- 魚池 -->
+                <td data-label="魚池">{{ r.pond }}</td>
+
+                <!-- 內容 -->
+                <td data-label="內容">
+                  {% if r.tags %}
+                    {% for t, cls in r.tags %}
+                      <span class="tag {{ cls }}">{{ t }}</span>
+                    {% endfor %}
+                  {% else %}
+                    <span style="color:#9aa4b2;">—</span>
+                  {% endif %}
+                </td>
+
+                <!-- 影片 -->
+                <td data-label="影片">
+                  {% set tag_texts = r.tags | map(attribute=0) | list %}
+                  {% if '行為異常' in tag_texts %}
+                    {% set behavior_ns.count = behavior_ns.count + 1 %}
+                    {% set vid_idx = ((behavior_ns.count - 1) % 6) + 1 %}
+                    {% set video_src = url_for('static', filename='demo_videos/demo' ~ vid_idx ~ '.mp4') %}
+                    <button class="btn btn-info btn-small"
+                            data-video="{{ video_src }}"
+                            onclick="openVideo(this)">
+                      播放
+                    </button>
+                  {% else %}
+                    <span style="color:#9aa4b2;">無影像</span>
+                  {% endif %}
+                </td>
+
+                <!-- 通知狀態 -->
+                <td data-label="通知狀態">
+                  {% if r.notified == '已通知' %}
+                    <span class="tag tag-ok">已通知</span>
+                  {% elif r.notified == '未通知' %}
+                    <span class="tag tag-warn">未通知</span>
+                  {% else %}
+                    <span class="tag tag-ok">—</span>
+                  {% endif %}
+                </td>
+
+                <!-- 處理狀態 -->
+                <td data-label="處理狀態">
+                  <button type="button"
+                          class="tag status-toggle {{ 'tag-ok' if r.status == '已處理' else 'tag-warn' }}"
+                          data-id="{{ r.id or '' }}"
+                          data-kind="{{ r.kind or 'data' }}"
+                          data-status="{{ r.status or '未處理' }}"
+                          data-pond="{{ r.pond or '' }}"
+                          data-ts="{{ r.ts or '' }}"
+                          data-hstart="{{ r.handle_start_at or '' }}"
+                          data-hend="{{ r.handle_end_at or '' }}">
+                    {% set st = r.status or '未處理' %}
+                    {% if (st == '已處理' or st == '處理中') and r.handler %}
+                      {{ r.handler }} {{ st }}
+                    {% else %}
+                      {{ st }}
+                    {% endif %}
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr class="no-data-row">
+                <td colspan="6" class="text-center no-data-cell py-4">
+                  目前沒有符合條件的異常紀錄
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+      
+    <div class="pagination-wrap mt-3">
+      <!--<div class="pager">
+        {% set pond_q = pond_id if pond_id != '（全部魚池）' else '' %}
+
+        {% if page > 1 %}
+          <a href="{{ url_for('history_result', pond_id=pond_q, start=start, end=end, page_size=page_size, page=1, abnormal_type=abnormal_type) }}">第一頁</a>
+          <a href="{{ url_for('history_result', pond_id=pond_q, start=start, end=end, page_size=page_size, page=page-1, abnormal_type=abnormal_type) }}">上一頁</a>
+        {% else %}
+          <span>第一頁</span><span>上一頁</span>
+        {% endif %}
+
+        {% if page < total_pages %}
+          <a href="{{ url_for('history_result', pond_id=pond_q, start=start, end=end, page_size=page_size, page=page+1, abnormal_type=abnormal_type) }}">下一頁</a>
+          <a href="{{ url_for('history_result', pond_id=pond_q, start=start, end=end, page_size=page_size, page=total_pages, abnormal_type=abnormal_type) }}">最後一頁</a>
+        {% else %}
+          <span>下一頁</span><span>最後一頁</span>
+        {% endif %}
+      </div>
+      <div class="range">
+        共 {{ total_count }} 筆，第 {{ page }} / {{ total_pages }} 頁
+      </div> -->
+      <div class="pagerbar">
+        {% set pond_q = pond_id if pond_id != '（全部魚池）' else '' %}
+
+        <!-- 左側：箭頭 + 頁碼 -->
+        <div class="page-links">
+          {# Prev arrow #}
+          {% if page > 1 %}
+            <a class="page-btn" href="{{ url_for('history_result', pond_id=pond_q, start=start, end=end, page_size=page_size, page=page-1, abnormal_type=abnormal_type) }}">‹</a>
+          {% else %}
+            <span class="page-btn disabled">‹</span>
+          {% endif %}
+
+          {# 頁碼 window：你可以調整 page-2/page+2 的範圍 #}
+          {% set start_p = 1 if page-2 < 1 else page-2 %}
+          {% set end_p   = total_pages if page+2 > total_pages else page+2 %}
+
+          {% set has_unhandled = (pages_with_unhandled is defined) %}
+
+          {# 需要顯示 1 #}
+          {% if start_p > 1 %}
+            {% set unhandled_1 = (has_unhandled and 1 in pages_with_unhandled) %}
+            <a class="page-num {% if unhandled_1 %}page-unhandled{% endif %}"
+              href="{{ url_for('history_result', pond_id=pond_q, start=start, end=end, page_size=page_size, page=1, abnormal_type=abnormal_type) }}">1</a>
+
+            {# 左邊 ellipsis：檢查被省略區間 2..start_p-1 是否有未處理 #}
+            {% if start_p > 2 %}
+              {% set left_has = false %}
+              {% if has_unhandled %}
+                {% for k in range(2, start_p) %}
+                  {% if k in pages_with_unhandled %}
+                    {% set left_has = true %}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+              <span class="page-ellipsis {% if left_has %}page-unhandled{% endif %}">…</span>
+            {% endif %}
+          {% endif %}
+
+          {# 中間頁碼 #}
+          {% for p in range(start_p, end_p+1) %}
+            {% set unhandled = (has_unhandled and p in pages_with_unhandled) %}
+            {% if p == page %}
+              <span class="page-num active {% if unhandled %}page-unhandled{% endif %}">{{ p }}</span>
+            {% else %}
+              <a class="page-num {% if unhandled %}page-unhandled{% endif %}"
+                href="{{ url_for('history_result', pond_id=pond_q, start=start, end=end, page_size=page_size, page=p, abnormal_type=abnormal_type) }}">{{ p }}</a>
+            {% endif %}
+          {% endfor %}
+
+          {# 需要顯示最後一頁 #}
+          {% if end_p < total_pages %}
+            {# 右邊 ellipsis：檢查被省略區間 end_p+1..total_pages-1 是否有未處理 #}
+            {% if end_p < total_pages - 1 %}
+              {% set right_has = false %}
+              {% if has_unhandled %}
+                {% for k in range(end_p+1, total_pages) %}
+                  {% if k in pages_with_unhandled %}
+                    {% set right_has = true %}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+              <span class="page-ellipsis {% if right_has %}page-unhandled{% endif %}">…</span>
+            {% endif %}
+
+            {% set unhandled_last = (has_unhandled and total_pages in pages_with_unhandled) %}
+            <a class="page-num {% if unhandled_last %}page-unhandled{% endif %}"
+              href="{{ url_for('history_result', pond_id=pond_q, start=start, end=end, page_size=page_size, page=total_pages, abnormal_type=abnormal_type) }}">{{ total_pages }}</a>
+          {% endif %}
+
+          {# Next arrow #}
+          {% if page < total_pages %}
+            <a class="page-btn" href="{{ url_for('history_result', pond_id=pond_q, start=start, end=end, page_size=page_size, page=page+1, abnormal_type=abnormal_type) }}">›</a>
+          {% else %}
+            <span class="page-btn disabled">›</span>
+          {% endif %}
+        </div>
+
+        <!-- 右側：Page [input] Go（用 GET，保留原本篩選條件） -->
+        <form class="page-jump" method="get" action="{{ url_for('history_result') }}">
+          <input type="hidden" name="pond_id" value="{{ pond_q }}">
+          <input type="hidden" name="start" value="{{ start }}">
+          <input type="hidden" name="end" value="{{ end }}">
+          <input type="hidden" name="page_size" value="{{ page_size }}">
+          <input type="hidden" name="abnormal_type" value="{{ abnormal_type }}">
+
+          <span class="page-label">頁</span>
+          <input class="page-input" type="number" name="page" min="1" max="{{ total_pages }}" value="{{ page }}">
+          <button class="page-go" type="submit">Go</button>
+        </form>
+      </div>
+      <button type="button" class="btn btn-primary filter-btn d-none" id="toggleFilterBtn">
+        調整時間
+      </button>
+      <button type="button" class="btn btn-primary filter-btn" id="btnHandlerDetail">
+        處理詳情
+      </button>
+    </div>
+  </div>
+
+  <!-- 影片 Modal -->
+  <div class="modal fade" id="videoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered video-modal-dialog">
+      <div class="modal-content" style="background:#0e1a2b; border:1px solid rgba(0,191,255,.35);">
+        <div class="modal-header">
+          <h5 class="modal-title">紀錄影片</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <video id="recVideo" controls style="width:100%; border-radius:8px; background:#000;"></video>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 處理狀態確認 Modal -->
+  <div class="modal fade" id="handleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="background:#0e1a2b; border:1px solid rgba(0,191,255,.35);">
+        <div class="modal-header">
+          <h5 class="modal-title">更新處理狀態</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p id="handleModalText">確認已處理這筆異常紀錄嗎？</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">否</button>
+          <button type="button" class="btn btn-primary" id="handleModalYes">是</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 處理詳情 Modal -->
+  <div class="modal fade" id="handlerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content" style="background:#0e1a2b; border:1px solid rgba(0,191,255,.35);">
+        <div class="modal-header">
+          <h5 class="modal-title">處理詳情（人員比例）</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="handlerChartEmpty" style="display:none; color:#9bd1ff;">
+            這個時間範圍內沒有「已處理」紀錄（或 handler 尚未填寫）。
+          </div>
+
+          <div class="row g-3 align-items-start">
+            <!-- 左：清單 -->
+            <div class="col-12 col-md-4">
+              <div class="text-white-50 mb-2">各員工處理次數</div>
+              <ul id="handlerList" class="list-group list-group-flush"></ul>
+              <div id="handlerTotal" class="mt-2 text-white-50 small"></div>
+            </div>
+
+            <!-- 右：圓餅 -->
+            <div class="col-12 col-md-8">
+              <div style="height:360px;">
+                <canvas id="handlerPie"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3" id="handlerSummary" style="color:#e8f6ff;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // ===== 播放影片 =====
+    function openVideo(btn){
+      const src = btn.getAttribute('data-video');
+      const v = document.getElementById('recVideo');
+      v.src = src || '';
+      const modalEl = document.getElementById('videoModal');
+      const m = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+      m.show();
+      modalEl.addEventListener('hidden.bs.modal', function () {
+        v.pause();
+        v.currentTime = 0;
+      }, { once: true });
+    }
+
+    // ===== 圓餅圖左側清單 =====
+    function renderHandlerList(labels, values, total){
+      const ul = document.getElementById("handlerList");
+      const totalEl = document.getElementById("handlerTotal");
+      if (!ul) return;
+
+      ul.innerHTML = "";
+      const items = labels.map((name, i) => ({ name, cnt: Number(values[i] || 0) }))
+                          .sort((a, b) => b.cnt - a.cnt);
+
+      items.forEach(it => {
+        const li = document.createElement("li");
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.style.background = "transparent";
+        li.style.color = "#d7e7ff";
+        li.style.borderColor = "rgba(0,191,255,.15)";
+        li.innerHTML = `
+          <span>${it.name}</span>
+          <span class="badge rounded-pill" style="background: rgba(0,180,255,.25); border: 1px solid rgba(0,180,255,.35);">
+            ${it.cnt}
+          </span>
+        `;
+        ul.appendChild(li);
+      });
+
+      if (totalEl) totalEl.textContent = total ? `合計：${total} 筆` : "";
+    }
+
+    // ===== 處理狀態互動 =====
+    let handleModal, handleModalEl, handleModalYesBtn;
+    let currentHandleTarget = null;
+
+    document.addEventListener('DOMContentLoaded', function(){
+      // 1) 初始化處理 modal
+      handleModalEl = document.getElementById('handleModal');
+      handleModalYesBtn = document.getElementById('handleModalYes');
+
+      if (handleModalEl) handleModal = new bootstrap.Modal(handleModalEl);
+      if (handleModalYesBtn) handleModalYesBtn.addEventListener('click', onHandleYes);
+
+      // 2) 綁定每一顆處理按鈕
+      document.querySelectorAll('.status-toggle').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          currentHandleTarget = this;
+
+          const tr   = this.closest('tr');
+          const ts   = tr?.querySelector('td[data-label="時間"]')?.textContent.trim() || '';
+          const pond = tr?.querySelector('td[data-label="魚池"]')?.textContent.trim() || '';
+
+          const txtEl = document.getElementById('handleModalText');
+          const st = this.dataset.status || '未處理';
+          if (txtEl){
+            if (st === '未處理') txtEl.textContent = `確認將「${pond} / ${ts}」標記為「處理中」嗎？`;
+            else if (st === '處理中') txtEl.textContent = `確認將「${pond} / ${ts}」標記為「已處理」嗎？`;
+            else txtEl.textContent = `要查看「${pond}」這筆事件的處理期間趨勢嗎？`;
+          }
+          if (handleModal) handleModal.show();
+        });
+      });
+
+      // 3) highlight_ts：進頁後自動定位 + 閃爍（只保留一份，避免重複與 null 問題）
+      const params = new URLSearchParams(window.location.search);
+      const highlightTs = params.get('highlight_ts');
+      if (highlightTs) {
+        let targetRow = document.querySelector(`tr[data-ts="${CSS.escape(highlightTs)}"]`);
+
+        if (!targetRow){
+          document.querySelectorAll('tr[data-ts]').forEach(row => {
+            const ts = row.getAttribute('data-ts') || '';
+            if (ts === highlightTs || ts.startsWith(highlightTs)) targetRow = row;
+          });
+        }
+
+        if (targetRow) {
+          setTimeout(() => {
+            targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+            targetRow.classList.add('highlight-blink');
+            targetRow.addEventListener('animationend', () => {
+              targetRow.classList.remove('highlight-blink');
+            }, { once:true });
+          }, 200);
+        }
+      }
+
+      // 4) 處理詳情（圓餅 + 左側清單）
+      let handlerModal;
+      let handlerChart = null;
+
+      const handlerModalEl = document.getElementById('handlerModal');
+      if (handlerModalEl) handlerModal = new bootstrap.Modal(handlerModalEl);
+
+      const btnHandlerDetail = document.getElementById('btnHandlerDetail');
+      if (btnHandlerDetail) {
+        btnHandlerDetail.addEventListener('click', async () => {
+          try {
+            const params = new URLSearchParams(window.location.search);
+            const apiUrl = '/api/handler_stats?' + params.toString();
+
+            const resp = await fetch(apiUrl);
+            const data = await resp.json();
+
+            if (!data.ok) {
+              alert(data.error || '更新失敗，請稍後再試');
+              return;
+            }
+
+            const labels = data.labels || [];
+            const values = data.values || [];
+            const total  = data.total || 0;
+
+            const emptyEl = document.getElementById('handlerChartEmpty');
+            const summaryEl = document.getElementById('handlerSummary');
+
+            // 左側清單
+            renderHandlerList(labels, values, total);
+
+            if (!labels.length || total === 0) {
+              if (emptyEl) emptyEl.style.display = 'block';
+              if (summaryEl) summaryEl.textContent = '';
+            } else {
+              if (emptyEl) emptyEl.style.display = 'none';
+
+              // summary（文字版）
+              if (summaryEl) {
+                const lines = labels.map((name, i) => {
+                  const c = values[i] || 0;
+                  const pct = ((c / total) * 100).toFixed(1);
+                  return `${name}：${c} 筆（${pct}%）`;
+                });
+                summaryEl.innerHTML = `<div>總已處理：${total} 筆</div><div class="mt-2">${lines.join('<br>')}</div>`;
+              }
+            }
+
+            // 圓餅圖
+            const ctx = document.getElementById('handlerPie');
+            if (ctx) {
+              if (handlerChart) {
+                handlerChart.destroy();
+                handlerChart = null;
+              }
+
+              handlerChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                  labels: labels,
+                  datasets: [{
+                    data: values
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                        display: true,
+                        position: 'right',
+                        labels: {
+                          color: '#e8f6ff'
+                        }
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: function(context) {
+                          const v = context.parsed || 0;
+                          const pct = total ? ((v / total) * 100).toFixed(1) : '0.0';
+                          return ` ${context.label}: ${v} (${pct}%)`;
+                        }
+                      }
+                    }
+                  }
+                }
+              });
+            }
+
+            if (handlerModal) handlerModal.show();
+
+          } catch (err) {
+            console.error('handler detail error:', err);
+            alert('更新失敗，請稍後再試');
+          }
+        });
+      }
+    });
+    function maybeJumpToDashboardAfterHandled(j, { pond }) {
+      const s = j.handle_start_at; // 只用開始時間當基準
+      if (!pond || !s) {
+        alert('缺少處理開始時間，無法形成趨勢圖');
+        return;
+      }
+
+      const startAt = new Date(s.replace(' ', 'T'));
+      const now     = new Date();
+
+      const diffMinFromStart = (now - startAt) / 60000;
+
+      // 距離開始處理不到 1 分鐘：不跳轉
+      if (diffMinFromStart < 1) {
+        alert('目前無法形成趨勢圖（距離開始處理時間太短），請耐心等待 1 分鐘後再查看。');
+        return;
+      }
+
+      // 固定抓「開始後 15 分鐘」；若現在還沒滿 15 分鐘，就抓到現在
+      const endAt = (diffMinFromStart >= 15)
+        ? new Date(startAt.getTime() + 15 * 60000)
+        : now;
+
+      const u = new URL('/pond_cycle', location.origin);
+      u.searchParams.set('pond_id', pond);
+      u.searchParams.set('start', formatDateTime(startAt));
+      u.searchParams.set('end', formatDateTime(endAt));
+
+      window.open(u.toString(), '_blank');
+    }
+
+    function formatDateTime(d){
+      const pad = (n)=> String(n).padStart(2,'0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+    (function () {
+      const w = window.innerWidth;
+
+      let desired = 10;
+      if (w <= 768) desired = 5;
+
+      const params = new URLSearchParams(location.search);
+      const cur = parseInt(params.get('page_size') || '0', 10);
+
+      // ✅ 避免無限重整：同一個 desired 只自動改一次
+      const last = sessionStorage.getItem('auto_page_size');
+      if (String(desired) === last) {
+        // 同步把頁面上的 hidden page_size 也改成 desired，避免之後 submit 又送回 10
+        document.querySelectorAll('input[name="page_size"]').forEach(i => i.value = String(desired));
+        return;
+      }
+      
+
+      // ✅ 只要目前 page_size != 建議值，就改
+      if (cur !== desired) {
+        sessionStorage.setItem('auto_page_size', String(desired));
+        params.set('page_size', String(desired));
+        params.set('page', '1'); // 建議：換每頁筆數就回第一頁
+        location.replace(location.pathname + '?' + params.toString());
+        return;
+      }
+
+      // 如果已經正確，也同步 hidden（保險）
+      document.querySelectorAll('input[name="page_size"]').forEach(i => i.value = String(desired));
+    })();
+
+    function onHandleYes(){
+      if (!currentHandleTarget) return;
+
+      const evtType   = currentHandleTarget.dataset.kind || 'data';   // data/behavior/leftover
+      const curStatus = currentHandleTarget.dataset.status || '未處理';
+      // ✅ 已處理：直接看趨勢，不要再打更新 API
+      if (curStatus === '已處理') {
+        const tr = currentHandleTarget.closest('tr');
+        const pond = (tr?.querySelector('td[data-label="魚池"]')?.textContent || '').trim();
+
+        // 用 dataset 也可（你有塞 data-hstart / data-hend）
+        const s = currentHandleTarget.dataset.hstart;
+        const e = currentHandleTarget.dataset.hend;
+
+        if (!pond || !s || !e) {
+          alert('缺少處理起訖時間，無法跳轉 dashboard');
+        } else {
+          // 這裡也可以直接走你 15 分鐘規則（推薦統一用 maybeJump...）
+          maybeJumpToDashboardAfterHandled({
+            handle_start_at: s,
+            handle_end_at: e
+          }, { pond });
+        }
+
+        if (handleModal) handleModal.hide();
+        currentHandleTarget = null;
+        return;
+      }
+      // 未處理->處理中，處理中->已處理
+      const nextStatus = (curStatus === '處理中') ? '已處理' : '處理中';
+
+      const tr = currentHandleTarget.closest('tr');
+
+      // 統一用表格內容拿 pond / ts（避免 dataset 沒放）
+      const pond = (tr?.querySelector('td[data-label="魚池"]')?.textContent || '').trim();
+      const ts   = (tr?.querySelector('td[data-label="時間"]')?.textContent || '').trim();
+
+      const payload = {
+        type: evtType,
+        next_status: nextStatus
+      };
+
+      // ✅ data 用 pond_id + ts 更新整組
+      if (evtType === 'data') {
+        payload.pond_id = pond;
+        payload.ts = ts;
+      } else {
+        // ✅ behavior/leftover 走 id
+        payload.id = currentHandleTarget.dataset.id || '';
+      }
+
+      fetch('/api/mark_event_handled', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      })
+      .then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ok, j}) => {
+        if (!ok || !j.ok) throw new Error(j.error || '更新失敗');
+
+        // 更新顯示
+        currentHandleTarget.textContent = j.display || j.status;
+        currentHandleTarget.dataset.status = j.status;
+
+        if (j.handle_start_at) currentHandleTarget.dataset.hstart = j.handle_start_at;
+        if (j.handle_end_at)   currentHandleTarget.dataset.hend   = j.handle_end_at;
+
+        currentHandleTarget.classList.remove('tag-warn','tag-ok');
+        if (j.status === '已處理') currentHandleTarget.classList.add('tag-ok');
+        else currentHandleTarget.classList.add('tag-warn');
+
+        if (tr && j.status !== '未處理') tr.classList.remove('row-unhandled');
+
+        // ✅ 只有「這裡」處理跳 dashboard（避免兩套邏輯打架）
+        if (j.status === '已處理') {
+          // 你要用 15 分鐘/1 分鐘規則，就走這個
+          maybeJumpToDashboardAfterHandled(j, { pond, kind: evtType });
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert('更新失敗：' + (err.message || '請稍後再試'));
+      })
+      .finally(() => {
+        if (handleModal) handleModal.hide();
+        currentHandleTarget = null;
+      });
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
+      // 你的篩選 form（你截圖看到的 form class）
+      const form = document.querySelector('form.d-flex.align-items-center.gap-3.flex-wrap');
+      if (!form) return;
+
+      // 1) 找到要收合/展開的「整塊區域」
+      //    我們把 form 的最近外層包成一個 panel，方便一鍵隱藏
+      let filterPanel = document.getElementById('filterPanel');
+      if (!filterPanel) {
+        // 你目前 form 外層通常在 .filter-row 那一塊，抓最近的容器
+        filterPanel = form.closest('.filter-row') || form.parentElement;
+        filterPanel.id = 'filterPanel';
+      }
+
+      const toggleBtn = document.getElementById('toggleFilterBtn');
+
+      // 2) 套用後（submit）記住收合狀態：refresh 後仍保留
+      form.addEventListener('submit', () => {
+        if (isMobile) sessionStorage.setItem('historyFiltersCollapsed', '1');
+      });
+
+      // 3) 依照記錄決定初始狀態（只在手機）
+      if (isMobile && sessionStorage.getItem('historyFiltersCollapsed') === '1') {
+        document.body.classList.add('filters-collapsed');
+        if (toggleBtn) toggleBtn.classList.remove('d-none');
+      } else {
+        document.body.classList.remove('filters-collapsed');
+      }
+
+      // 4) 點「調整時間範圍」：展開；再點一次：收合
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+          document.body.classList.toggle('filters-collapsed');
+
+          // 同步記錄狀態
+          if (document.body.classList.contains('filters-collapsed')) {
+            sessionStorage.setItem('historyFiltersCollapsed', '1');
+          } else {
+            sessionStorage.setItem('historyFiltersCollapsed', '0');
+          }
+        });
+      }
+    });
+    (function () {
+        const mql = window.matchMedia("(max-width: 768px)");
+
+        function formatTableForMobile() {
+          if (!mql.matches) return;
+
+          // 你的表格（有 table-neo / abnormal-table 其中之一即可）
+          const table = document.querySelector("table.table-neo") || document.querySelector("table.abnormal-table");
+          if (!table) return;
+
+          const rows = table.querySelectorAll("tbody tr");
+
+          rows.forEach(tr => {
+            const tds = tr.querySelectorAll("td");
+            if (tds.length < 2) return;
+
+            // 1) 時間欄（第1欄）：去掉秒數
+            // 支援：2026-02-04 09:11:13 / 09:11:13 / 2026-02-04 09:11:13.123
+            const timeTd = tds[0];
+            if (!timeTd.dataset.rawText) timeTd.dataset.rawText = timeTd.textContent;
+
+            const rawTime = timeTd.dataset.rawText;
+            timeTd.textContent = rawTime.replace(/(\d{2}:\d{2})(:\d{2})(\.\d+)?/g, "$1");
+
+            // 2) 魚池欄（第2欄）：移除 "Pond" 字樣
+            const pondTd = tds[1];
+            if (!pondTd.dataset.rawText) pondTd.dataset.rawText = pondTd.textContent;
+
+            const rawPond = pondTd.dataset.rawText;
+            pondTd.textContent = rawPond.replace(/^\s*pond\s*/i, "").trim();
+          });
+        }
+
+        function restoreTable() {
+          // 回到桌機時恢復原文字（避免桌機也被改掉）
+          const table = document.querySelector("table.table-neo") || document.querySelector("table.abnormal-table");
+          if (!table) return;
+
+          table.querySelectorAll("tbody tr").forEach(tr => {
+            const tds = tr.querySelectorAll("td");
+            if (tds.length < 2) return;
+
+            if (tds[0].dataset.rawText) tds[0].textContent = tds[0].dataset.rawText;
+            if (tds[1].dataset.rawText) tds[1].textContent = tds[1].dataset.rawText;
+          });
+        }
+
+        function applyByWidth() {
+          if (mql.matches) formatTableForMobile();
+          else restoreTable();
+        }
+
+        // 初次進入
+        document.addEventListener("DOMContentLoaded", applyByWidth);
+
+        // 螢幕寬度改變（旋轉/縮放）
+        if (mql.addEventListener) mql.addEventListener("change", applyByWidth);
+        else mql.addListener(applyByWidth);
+      })();
+      // ===== 篩選條件：改成「離開欄位/失焦」才自動套用 =====
+      document.addEventListener('DOMContentLoaded', () => {
+        const form = document.querySelector('form[action*="history_result"]');
+        if (!form) return;
+
+        const pondSel = form.querySelector('select[name="pond_id"]');
+        const typeSel = form.querySelector('select[name="abnormal_type"]');
+        const startIn = form.querySelector('input[name="start"]');
+        const endIn   = form.querySelector('input[name="end"]');
+
+        let t = null;
+        const submitSoon = () => {
+          clearTimeout(t);
+          t = setTimeout(() => {
+            const page = form.querySelector('input[name="page"]');
+            if (page) page.value = '1';
+            form.submit();
+          }, 200);
+        };
+
+        // ✅ 下拉選單：改了就可以立刻送
+        if (pondSel) pondSel.addEventListener('change', submitSoon);
+        if (typeSel) typeSel.addEventListener('change', submitSoon);
+
+        // ✅ 日期時間：不要用 change/input，改用「失焦」才送（點到日期以外才會 blur）
+        const bindDateBlurSubmit = (el) => {
+          if (!el) return;
+
+          let lastValue = el.value;
+
+          el.addEventListener('focus', () => {
+            lastValue = el.value; // 記住進入欄位前的值
+          });
+
+          el.addEventListener('blur', () => {
+            // 只有值真的變了才送，避免點一下又送
+            if (el.value !== lastValue) submitSoon();
+          });
+
+          // 使用者按 Enter 也送出（可選但實用）
+          el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submitSoon();
+            }
+          });
+        };
+
+        bindDateBlurSubmit(startIn);
+        bindDateBlurSubmit(endIn);
+      });
+    </script>
+</body>
+</html>

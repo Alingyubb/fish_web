@@ -1,0 +1,159 @@
+/* ========= 基本變數 & 斷點 ========= */
+:root{
+  --header-h: 56px;
+  --wrap-max: 1800px;       /* 桌機最大寬 */
+  --gap: 12px;
+
+  /* 主圖表高度控制 (Dashboard) */
+  --chart-h: clamp(320px, 36vh, 520px);
+
+  /* 系統設定（滑桿） */
+  --slider-wrap-h: 100px;
+  --track-h: 6px;
+  --thumb-size: 16px;
+  --dual-offset: 6px;
+}
+
+/* 斷點：跟你版面一致的切點 */
+@media (max-width: 1300px){ :root{ --chart-h: clamp(280px, 34vh, 420px); } }
+@media (max-width: 1100px){
+  :root{
+    --chart-h: clamp(240px, 32vh, 360px);
+    --slider-wrap-h: 80px;
+    --thumb-size: 14px;
+    --dual-offset: 4px;
+  }
+}
+@media (max-width: 768px){
+  :root{
+    --chart-h: clamp(220px, 34vh, 320px);
+    --slider-wrap-h: 64px;
+    --thumb-size: 12px;
+    --dual-offset: 3px;
+  }
+}
+
+/* ========= 通用：Header / Wrap / 欄位 ========= */
+.header-bar{ flex-wrap: wrap; gap: 8px; }
+.dashboard-title{ margin: 0 auto; text-align: center; }
+.wrap{
+  width: min(96vw, var(--wrap-max));
+  margin: 16px auto;
+  padding: 0 12px;
+}
+
+/* ========= Dashboard（首頁圖表） ========= */
+.grid, .row{ 
+  display: grid; 
+  grid-template-columns: repeat(2, 1fr); 
+  gap: var(--gap);
+}
+@media (max-width: 1100px){
+  .grid, .row{ grid-template-columns: 1fr; }
+}
+.chart-box{
+  width: 100%;
+  min-width: 0;                 /* 避免把格子撐爆造成捲動 */
+  height: var(--chart-h);       /* 用變數統一高度 */
+  background:#1f2d3d; 
+  padding: 8px; 
+  border-radius: 12px;
+  box-shadow:0 8px 22px rgba(0,0,0,.35), 0 0 0 1px rgba(0,191,255,.06) inset;
+}
+.chart-box canvas{
+  display:block;
+  width:100% !important; 
+  height:100% !important;
+  background:#0e1a2b; 
+  border-radius:8px;
+}
+
+/* ========= 即時頁：主結構 ========= */
+.main{ 
+  display:flex; 
+  gap: 12px; 
+  height: calc(100vh - var(--header-h));
+  padding: 10px 12px; 
+  box-sizing: border-box; 
+  overflow: hidden;
+}
+.left{ 
+  flex: 1 1 auto; 
+  min-width: 0;          /* 避免右欄把左欄擠爆 */
+  display:flex; flex-direction:column; gap:10px; 
+  overflow:hidden;
+}
+.right{ 
+  width: 480px; 
+  min-width: 360px; 
+  display:grid; 
+  grid-template-rows: 1fr auto auto; 
+  gap: 10px; 
+  overflow:hidden;
+}
+@media (max-width: 1100px){
+  .main{ height:auto; overflow:auto; flex-direction: column; }
+  .right{ width: 100%; min-width: 0; grid-template-rows: auto auto auto; }
+}
+
+/* 影片框（小螢幕用等比例避免過高） */
+.video-shell{ position: relative; width: 100%; height: 100%; background: #000; border-radius: 10px; overflow: hidden; }
+.video-shell video{ width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 1100px){
+  .video-shell{ aspect-ratio: 16/9; height: auto; }
+}
+
+/* 即時頁「水質數據」內的藍框白膠囊（跟你現在版型相容） */
+.kv-value{
+  /* 小螢幕膠囊別太寬 */
+  width: clamp(220px, 40vw, 360px);
+  min-width: clamp(220px, 40vw, 360px);
+  height: clamp(56px, 6vh, 72px);
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* ========= 系統設定：滑桿 RWD ========= */
+.slider-wrap{ position:relative; height: var(--slider-wrap-h); }
+.slider-wrap input[type="range"]{ position:absolute; inset:0; width:100%; height: var(--slider-wrap-h); background:transparent; -webkit-appearance:none; appearance:none; outline:none; }
+/* 只有雙滑桿才上下錯開以免搶事件 */
+.th-item[data-single!="true"] .rng-min{ transform: translateY(calc(var(--dual-offset) * -1)); }
+.th-item[data-single!="true"] .rng-max{ transform: translateY(var(--dual-offset)); }
+.slider-wrap input[type="range"]::-webkit-slider-runnable-track{ height: var(--track-h); background:#fff2; border-radius:999px; }
+.slider-wrap input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none;
+  width: var(--thumb-size); height: var(--thumb-size); border-radius:50%;
+  background:#00bfff; border:2px solid #0b2a3c; cursor:pointer;
+  margin-top: calc((var(--track-h) - var(--thumb-size)) / 2);
+}
+.slider-wrap input[type="range"]::-moz-range-track{ height: var(--track-h); background:#fff2; border-radius:999px; }
+.slider-wrap input[type="range"]::-moz-range-thumb{ width: var(--thumb-size); height: var(--thumb-size); border-radius:50%; background:#00bfff; border:2px solid #0b2a3c; cursor:pointer; }
+.slider-progress{ position:absolute; left:0; top:50%; transform:translateY(-50%); height: var(--track-h); background:linear-gradient(90deg,#00bfff,#00bfff); border-radius:999px; width:0; pointer-events:none; }
+
+/* ========= 異常次數頁（Chart 容器） ========= */
+.abnormal-chart-box{ height: var(--chart-h); }
+.abnormal-chart-box canvas{ width:100% !important; height:100% !important; }
+
+/* ========= 歷史資料表：兩種做法（擇一） ========= */
+
+/* A. 最少改動：加個橫向滾動容器包 table */
+.table-scroll{ overflow-x:auto; }
+.table-scroll table{ min-width: 900px; }
+
+/* B. 手機卡片式（想更漂亮再用這個）：在手機把每列堆成卡片 */
+@media (max-width: 768px){
+  table.responsive-stack thead{ display:none; }
+  table.responsive-stack, 
+  table.responsive-stack tbody, 
+  table.responsive-stack tr, 
+  table.responsive-stack td{ display:block; width:100%; }
+  table.responsive-stack tr{ margin-bottom: 12px; border:1px solid rgba(255,255,255,.08); border-radius:10px; overflow:hidden; }
+  table.responsive-stack td{
+    padding: 8px 10px; border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  table.responsive-stack td:last-child{ border-bottom:0; }
+  /* 顯示欄名：請在 <td data-th="時間">… 這樣帶上 data-th */
+  table.responsive-stack td::before{
+    content: attr(data-th);
+    display:block; color:#9bd1ff; font-size:.9rem; margin-bottom:2px;
+  }
+}

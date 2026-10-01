@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pond Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<style>
+  :root{
+    --bg:#0e1a2b; --panel:#172537; --accent:#00bfff; --text:#ffffff; --muted:#9bd1ff;
+
+    /* 可調參數 */
+    --wrap-maxw: 2400px;  /* 內容最大寬（越大圖越寬） */
+    --grid-cols: 2;       /* 一列放幾張圖 */
+    --grid-gap: 18px;     /* 圖與圖間距 */
+    --top-h: 160px;       /* 頂部區塊(標題/下拉)的高度估算，用來算出圖表高度 */
+  }
+
+  *{ box-sizing:border-box; }
+  html, body{ height:100%; }
+  body{
+      min-height:80vh;            /* ✅ 允許內容變長 */
+      height:auto;                 /* ✅ 不鎖死 100vh */
+      display:grid;
+      grid-template-rows:auto 1fr;
+      overflow-y:auto;             /* ✅ 頁面可以上下捲 */
+      background:var(--bg); color:var(--text); margin:0;
+      font-family:"Segoe UI",sans-serif;
+      overflow:hidden;
+  }
+
+  /* 頂部列 */
+  .header-bar{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--panel); color:#fff; padding:10px 18px;
+    border-bottom:2px solid var(--accent); position:sticky; top:0; z-index:10;
+  }
+  .navs,.nav-button,.history-button{ display:flex; gap:10px; align-items:center; }
+  .dashboard-title{
+      font-size:1.6rem;
+      padding:14px 0;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-shadow: 0 0 18px rgba(0,191,255,.25);
+      white-space: nowrap;
+    }  
+    .nav-button a, .history-button a, .my-button{
+      background:#007BFF; color:#fff; padding:8px 12px;
+      border-radius:10px; text-decoration:none; font-weight:600;
+      box-shadow:0 2px 6px rgba(0,0,0,.3);
+    }
+  .my-button{ border:none; cursor:pointer; }
+  .nav-button a:hover, .history-button a:hover, .my-button:hover{ background:#0056b3; }
+
+  /* 魚池下拉 */
+  .pond-select-wrapper{ text-align:center; margin:10px 0 6px; }
+  select{
+    background:#142132; color:#e8f6ff; border:1px solid rgba(0,191,255,.35);
+    border-radius:8px; padding:6px 10px; font-size:16px; outline:none;
+  }
+  select:focus{ border-color:var(--accent); }
+  .pond-name{ text-align:center; color:#00bfff; margin-bottom:6px; }
+
+  /* ===== Sub header：左(模式) 中(魚池) 右(時間範圍) ===== */
+  .top-area{
+    min-height: 36px;
+    width: min(98vw, var(--wrap-maxw));
+    margin: 10px auto 6px;
+    padding: 0 8px;
+    align-items: center; 
+  }
+
+  .top-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .top-left{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .top-center{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 10px;
+    flex: 1;
+    min-width: 260px;
+  }
+
+  .top-right{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  /* mode-toggle 原本 inline style 拿掉後靠這裡 */
+  .mode-toggle{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin:0;
+  }
+
+  /* ===== 手機版漢堡按鈕（跟其他頁一致） ===== */
+  .hamburger-btn{
+    background: rgba(0,191,255,.18);
+    border: 1px solid rgba(0,191,255,.35);
+    color:#fff;
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+  .hamburger-btn:hover{
+    background: rgba(0,191,255,.28);
+  }
+
+  /* offcanvas 裡的選單按鈕（跟其他頁一致） */
+  .nav-btn{
+    display:inline-block;
+    background:#007BFF;
+    color:#fff !important;
+    padding:10px 14px;
+    border-radius:12px;
+    text-decoration:none;
+    font-weight:700;
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  }
+  .nav-btn:hover{ background:#0056b3; }
+
+  /* 窄螢幕：三區塊自動換行 */
+  @media (max-width: 900px){
+    .top-left{ order:1; width:100%; }
+    .top-center{ order:2; width:100%; }
+    .top-right{ order:3; width:100%; }
+    .top-right{ justify-content:flex-end; }
+  }
+
+  /* 主要內容容器：置中 + 吃滿視窗寬 */
+  .wrap{
+    width: min(98vw, var(--wrap-maxw)); /* ← 圖表更寬 */
+    margin: 12px auto;
+    padding: 0 8px;
+  }
+
+  /* 2×2 Grid 佈局 */
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(var(--grid-cols), minmax(0,1fr));
+    gap: var(--grid-gap);
+    max-width:100%;
+    margin:0 auto;
+  }
+
+  /* 每張圖的高度 = (視窗高 - 頂部估算高 - 上下 padding/間距) / 2
+     這樣兩排剛好塞滿，不會需要上下捲動 */
+  .chart-box{
+    background:#1f2d3d; padding:10px; border-radius:12px;
+    box-shadow:0 8px 22px rgba(0,0,0,.35), 0 0 0 1px rgba(0,191,255,.06) inset;
+    width:100%;
+    min-width:0;
+    height: calc((100vh - var(--top-h) - (var(--grid-gap) + 32px)) / 2);
+    contain: layout paint size;
+  }
+
+  .chart-box canvas{
+    display:block;
+    width:100% !important; height:100% !important;
+    background:#0e1a2b; border-radius:8px;
+  }
+
+  /* 窄螢幕 fallback：改單欄，允許滾動 */
+  @media (max-width: 1200px){
+    body{ overflow:auto; }      /* 手機時允許滾動，避免擠壓 */
+    .wrap{ width: 96vw; }
+    :root{ --grid-cols:1; }
+    .chart-box{ height: 48vh; } /* 手機時每張圖約半個螢幕高 */
+  }
+
+  /* ===== 模式切換（歷史/預測） ===== */
+  .mode-btn{
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .mode-btn.active{
+    background: rgba(0,191,255,0.25);
+    border-color: rgba(0,191,255,0.65);
+  }
+  .mode-hint{
+    color: rgba(255,255,255,0.75);
+    align-self: center;
+    font-size: 14px;
+  }
+
+</style>
+
+</head>
+<body>
+  <form id="historyForm" action="/history_result" method="POST" style="display:none;">
+    <input type="hidden" name="pond_id" id="hiddenPondId">
+    <input type="hidden" name="start"   id="hiddenStart">
+    <input type="hidden" name="end"     id="hiddenEnd">
+    <input type="hidden" name="date"        id="hiddenDate">
+    <input type="hidden" name="start_hour"  id="hiddenStartHour">
+    <input type="hidden" name="end_hour"    id="hiddenEndHour">
+  </form>
+
+  <!-- 手機版漢堡選單 -->
+  <div class="offcanvas offcanvas-start text-bg-dark" tabindex="-1" id="mobileNavDash">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title">功能選單</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="d-flex flex-column gap-3">
+        <a class="nav-btn text-center" href="/pond_cycle">趨勢分析</a>
+        <a class="nav-btn text-center" href="/realtime_status">即時狀態</a>
+        <a class="nav-btn text-center" href="#" id="toHistoryBtnMobile">異常查看</a>
+        <a class="nav-btn text-center" href="/ar_remote"> 遠端協作</a>
+        <a class="nav-btn text-center" href="/system_settings">門檻設定</a>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="header-bar">
+    <!-- 手機：漢堡按鈕 -->
+    <button class="btn d-lg-none hamburger-btn" type="button"
+            data-bs-toggle="offcanvas" data-bs-target="#mobileNavDash">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+          fill="currentColor" viewBox="0 0 16 16">
+        <path fill-rule="evenodd"
+              d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+      </svg>
+    </button>
+
+    <!-- 桌機：原本左側按鈕列 -->
+    <div class="navs d-none d-lg-flex">
+      <div class="nav-button"><a href="/pond_cycle">趨勢分析</a></div>
+      <div class="nav-button"><a href="/realtime_status">即時狀態</a></div>
+      <div class="nav-button"><a href="/ar_remote"> 遠端協作</a></div>
+    </div>
+
+    <div class="dashboard-title">趨勢分析</div>
+
+    <!-- 桌機：原本右側按鈕列 -->
+    <div class="navs d-none d-lg-flex">
+      <div class="nav-button"><a href="#" id="toHistoryBtn">異常查看</a></div>
+      <div class="nav-button"><a href="/system_settings">門檻設定</a></div>
+    </div>
+
+    <!-- 手機：右側留空讓標題置中對齊 -->
+    <div class="d-lg-none" style="width:40px; visibility:hidden;"></div>
+  </div>
+
+  <!-- 即時資料狀態提示 Modal -->
+  <div class="modal fade" id="realtimeStatusModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-white" style="border:1px solid rgba(0,191,255,.35);">
+        <div class="modal-header">
+          <h5 class="modal-title">即時資料狀態</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="realtimeStatusModalMsg">狀態載入中…</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">確定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="top-area">
+    <div class="top-row">
+      <!-- 左：模式切換 -->
+      <div class="top-left">
+        <div class="mode-toggle">
+          <button type="button" id="modeHistoryBtn" class="mode-btn active">歷史趨勢</button>
+          <button type="button" id="modePredBtn" class="mode-btn">趨勢預測</button>
+          <!--<div class="mode-hint">（預測：最近 30 分鐘 + 未來 1 小時）</div>-->
+        </div>
+      </div>
+
+      <!-- 中：選擇魚池 -->
+      <div class="top-center">
+        <label for="pondSelect">選擇魚池：</label>
+        <select id="pondSelect">
+          {% for pond_id in ponds_all %}
+            <option value="{{ pond_id }}" {% if pond_id == selected_pond %}selected{% endif %}>
+              {{ pond_id }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- 右：選擇時間範圍（從 header-bar 搬下來） -->
+      <div class="top-right">
+        <button type="button" class="my-button" data-bs-toggle="modal" data-bs-target="#historyTimeModal">
+          選擇時間範圍
+        </button>
+      </div>
+    </div>
+
+    <!-- 狀態列與提示放在下一行（整行滿版） -->
+    <!--<div id="statusBar" class="alert alert-info py-2" style="margin:8px 0;">狀態載入中…</div>
+    <div id="emptyHint" class="alert alert-secondary py-2" style="display:none; margin:8px 0;"></div>-->
+  </div>
+
+  <div class="wrap">
+    <div class="grid">
+      <div class="chart-box"><canvas id="tempChart"></canvas></div>
+      <div class="chart-box"><canvas id="orpChart"></canvas></div> 
+      <div class="chart-box"><canvas id="phChart"></canvas></div>
+      <div class="chart-box"><canvas id="doChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="historyTimeModal" tabindex="-1" aria-labelledby="historyTimeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-white" style="border:1px solid rgba(0,191,255,.35);">
+        <div class="modal-header">
+          <h5 class="modal-title" id="historyTimeModalLabel">日期選擇</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label" for="pondSelectHistory">選擇魚池：</label>
+          <select id="pondSelectHistory" class="form-select">
+            {% for pond_id in ponds_all %}
+              <option value="{{ pond_id }}" {% if pond_id == selected_pond %}selected{% endif %}>
+                {{ pond_id }}
+              </option>
+            {% endfor %}
+          </select>
+
+          <div class="mb-3">
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-sm btn-outline-info" data-range="1h">近 1 小時</button>
+              <button type="button" class="btn btn-sm btn-outline-info" data-range="6h">近 6 小時</button>
+              <button type="button" class="btn btn-sm btn-outline-info" data-range="12h">近 12 小時</button>
+              <button type="button" class="btn btn-sm btn-outline-info" data-range="24h">近 24 小時</button>
+              <button type="button" class="btn btn-sm btn-outline-info" data-range="today">今天</button>
+              <button type="button" class="btn btn-sm btn-outline-info" data-range="yesterday">昨天</button>
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label" for="startTime">開始時間：</label>
+              <input type="text" id="startTime" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="endTime">結束時間：</label>
+              <input type="text" id="endTime" class="form-control">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" onclick="submitQuery()">變更</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+    // ---- flatpickr ----
+    const fpStart = flatpickr("#startTime", { enableTime:true, dateFormat:"Y-m-d H:i" });
+    const fpEnd   = flatpickr("#endTime",   { enableTime:true, dateFormat:"Y-m-d H:i" });
+    function setRange(startDate, endDate){ fpStart.setDate(startDate, true); fpEnd.setDate(endDate, true); }
+
+    // ---- 快速範圍 ----
+    function applyPreset(preset){
+      const now = new Date(); let s, e;
+      if (preset.endsWith('h')) { const h = parseInt(preset); e = now; s = new Date(now.getTime() - h*3600*1000); }
+      else if (preset === 'today') { const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()); s = d0; e = now; }
+      else if (preset === 'yesterday') { const y = new Date(now.getFullYear(), now.getMonth(), now.getDate()-1); s = y; e = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23,59,59); }
+      setRange(s, e);
+    }
+    document.addEventListener('click', (ev)=>{ const btn = ev.target.closest('button[data-range]'); if (btn) applyPreset(btn.dataset.range); });
+
+    // ---- 偏好儲存 ----
+    const LS_KEYS = { pond:'hist.pond', start:'hist.start', end:'hist.end', newtab:'hist.newtab' };
+    function savePrefs(pond, startStr, endStr, newTab){
+      localStorage.setItem(LS_KEYS.pond, pond);
+      localStorage.setItem(LS_KEYS.start, startStr);
+      localStorage.setItem(LS_KEYS.end, endStr);
+      localStorage.setItem(LS_KEYS.newtab, newTab ? '1' : '0');
+    }
+    function loadPrefs(){
+      return {
+        pond:  localStorage.getItem(LS_KEYS.pond),
+        start: localStorage.getItem(LS_KEYS.start),
+        end:   localStorage.getItem(LS_KEYS.end),
+        newtab:localStorage.getItem(LS_KEYS.newtab) === '1'
+      };
+    }
+    function getQS(name){ return new URLSearchParams(location.search).get(name); }
+    function optionExists(sel, val){ return sel && Array.from(sel.options).some(o => o.value === val); }
+
+    // 取「上次偏好」或預設近 6 小時
+    function getRangeFromPrefsOrDefault() {
+      const prefs = loadPrefs();
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      let start = prefs.start, end = prefs.end;
+      if (!start || !end) {
+        const s = new Date(now.getTime() - 6*3600*1000);
+        start = fmt(s); end = fmt(now);
+      }
+      return { start, end };
+    }
+
+    // 導向首頁（讓後端依 start/end 產生新 chart_data）
+    function navigateDashboardWithRange(pond, startStr, endStr){
+      const params = new URLSearchParams();
+      if (pond) params.set('pond_id', pond);
+      if (startStr) params.set('start', startStr);
+      if (endStr)   params.set('end', endStr);
+      location.href = location.pathname + '?' + params.toString();
+    }
+
+    // 導向歷史頁
+    function gotoHistoryPage(pond, startStr, endStr) {
+      const u = new URL('/history_result', location.origin);
+      if (pond)  u.searchParams.set('pond_id', pond);
+      if (startStr) u.searchParams.set('start', startStr);
+      if (endStr)   u.searchParams.set('end', endStr);
+      u.searchParams.set('page', '1');
+      u.searchParams.set('page_size', '50');
+      location.href = u.toString();
+    }
+
+    // === 數據查看：直接進歷史頁 ===
+    document.getElementById('toHistoryBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const pondSel = document.getElementById('pondSelect');
+        const pond = pondSel ? pondSel.value : (loadPrefs().pond || 'Pond A');
+
+        // ★★★【核心修正】★★★
+        // 1. 優先從當前頁面的網址 (URL) 獲取 start 和 end 時間
+        let start = getQS('start');
+        let end = getQS('end');
+
+        // 2. 如果網址上沒有時間（例如第一次載入頁面），才 fallback 到原本的邏輯
+        if (!start || !end) {
+            const defaultRange = getRangeFromPrefsOrDefault();
+            start = defaultRange.start;
+            end = defaultRange.end;
+        }
+
+        gotoHistoryPage(pond, start, end);
+    });
+
+    // === 調整日期：沿用原 modal，開啟時帶入目前/上次選擇 ===
+    const historyModalEl = document.getElementById('historyTimeModal');
+    historyModalEl?.addEventListener('shown.bs.modal', () => {
+      const pondMain = document.getElementById('pondSelect');
+      const pondHist = document.getElementById('pondSelectHistory');
+      const prefs = loadPrefs();
+
+      if (pondHist) {
+        if (pondMain && optionExists(pondHist, pondMain.value)) {
+          pondHist.value = pondMain.value;
+        } else if (prefs.pond && optionExists(pondHist, prefs.pond)) {
+          pondHist.value = prefs.pond;
+        } else {
+          pondHist.value = optionExists(pondHist, 'Pond A') ? 'Pond A' : pondHist.options[0]?.value || '';
+        }
+      }
+
+      if (prefs.start && prefs.end) { fpStart.setDate(prefs.start, true); fpEnd.setDate(prefs.end, true); }
+      else { applyPreset('6h'); }
+    });
+
+    // === 送出調整日期：只更新首頁圖表，不跳歷史頁 ===
+    function submitQuery(){
+      const pond = pondSelect.value;
+      const start = document.getElementById("startTime")?.value || "";
+      const end   = document.getElementById("endTime")?.value || "";
+
+      // ✅ 使用者按下套用 → 下一次 renderStatus 時彈出即時狀態提示
+      markRealtimePopupPending();
+
+      const prefs = loadPrefs();
+      savePrefs(pond, start, end, prefs.newtab);
+
+      navigateDashboardWithRange(pond, start, end);
+    }
+
+    historyModalEl?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitQuery(); } });
+
+    function applyStaleStyle(chart, isStale){
+      chart.data.datasets[0].borderDash = isStale ? [6, 6] : [];
+    }
+
+    // ---- Chart.js ----
+    const chartData  = {{ chart_data|tojson }};
+    const pondNames  = Object.keys(chartData || {});
+    const pondSelect = document.getElementById("pondSelect");
+    const pondStatus = {{ pond_status|tojson }};
+
+
+    // ========== plugin：預測區淡色底 ==========
+    const shadeFuturePlugin = {
+      id: 'shadeFuture',
+      beforeDatasetsDraw(chart, args, pluginOptions) {
+        const futureStartIndex = pluginOptions.futureStartIndex;
+        if (futureStartIndex == null || futureStartIndex < 0) return;
+
+        const xScale = chart.scales.x;
+        const ca = chart.chartArea;
+        if (!xScale || !ca) return;
+
+        const ctx = chart.ctx;
+        const startX = xScale.getPixelForValue(futureStartIndex);
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,255,0,0.25)';   // ★新版：底色較明顯
+        ctx.fillRect(startX, ca.top, ca.right - startX, ca.bottom - ca.top);
+        ctx.restore();
+      }
+    };
+    // ===== plugin：換日紅色標記（不影響 ticks autoSkip）=====
+    const dayChangeTagPlugin = {
+      id: 'dayChangeTag',
+      afterDatasetsDraw(chart, args, pluginOptions) {
+        const labels = chart.data.labels || [];
+        if (!labels.length) return;
+
+        // 找出「換日點」：labels[i] 的 datePart 跟 labels[i-1] 不同
+        const dayBreaks = [];
+        const getDatePart = (s) => {
+          if (!s) return "";
+          // 支援 "MM-DD HH:MM" 或 "YYYY-MM-DD HH:MM"
+          return String(s).split(" ")[0] || "";
+        };
+
+        for (let i = 1; i < labels.length; i++) {
+          const d1 = getDatePart(labels[i - 1]);
+          const d2 = getDatePart(labels[i]);
+          if (d1 && d2 && d1 !== d2) dayBreaks.push(i);
+        }
+        if (!dayBreaks.length) return;
+
+        const xScale = chart.scales.x;
+        const ca = chart.chartArea;
+        if (!xScale || !ca) return;
+
+        const ctx = chart.ctx;
+        const lineColor = (pluginOptions && pluginOptions.lineColor) || 'rgba(255,80,80,0.95)';
+        const labelBg  = (pluginOptions && pluginOptions.labelBg)  || 'rgba(255,80,80,0.95)';
+        const labelTxt = (pluginOptions && pluginOptions.labelTxt) || '#fff';
+
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = lineColor;
+
+        // 你通常只會跨一次日；如果你想全部都畫，就保留迴圈
+        for (const idx of dayBreaks) {
+          // category scale：idx 就是 label index
+          const x = xScale.getPixelForValue(idx);
+
+          // 1) 畫紅色直線
+          ctx.beginPath();
+          ctx.moveTo(x, ca.top);
+          ctx.lineTo(x, ca.bottom);
+          ctx.stroke();
+
+          // 2) 在上方畫一個小標籤（顯示日期）
+          const datePart = String(labels[idx]).split(" ")[0] || "換日";
+          const text = datePart; // 你也可改成 "換日 " + datePart
+
+          ctx.font = 'bold 12px Segoe UI, Microsoft JhengHei, sans-serif';
+          const paddingX = 8, paddingY = 4;
+          const textW = ctx.measureText(text).width;
+          const boxW = textW + paddingX * 2;
+          const boxH = 20;
+
+          // 位置：右上角靠近紅線，避免被裁切
+          let bx = x + 6;
+          let by = ca.top + 6;
+          if (bx + boxW > ca.right) bx = x - boxW - 6;
+
+          // 圓角矩形
+          const r = 6;
+          ctx.fillStyle = labelBg;
+          ctx.beginPath();
+          ctx.moveTo(bx + r, by);
+          ctx.lineTo(bx + boxW - r, by);
+          ctx.quadraticCurveTo(bx + boxW, by, bx + boxW, by + r);
+          ctx.lineTo(bx + boxW, by + boxH - r);
+          ctx.quadraticCurveTo(bx + boxW, by + boxH, bx + boxW - r, by + boxH);
+          ctx.lineTo(bx + r, by + boxH);
+          ctx.quadraticCurveTo(bx, by + boxH, bx, by + boxH - r);
+          ctx.lineTo(bx, by + r);
+          ctx.quadraticCurveTo(bx, by, bx + r, by);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = labelTxt;
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, bx + paddingX, by + boxH / 2);
+        }
+
+        ctx.restore();
+      }
+    };
+
+
+    // ========== plugin：左上角「預測開始」標籤 ==========
+    const forecastTagPlugin = {
+      id: 'forecastTag',
+      afterDraw(chart, args, pluginOptions) {
+        const futureStartIndex = pluginOptions.futureStartIndex;
+        if (futureStartIndex == null || futureStartIndex < 0) return;
+
+        const xScale = chart.scales.x;
+        const ca = chart.chartArea;
+        if (!xScale || !ca) return;
+
+        const ctx = chart.ctx;
+        const xPos = xScale.getPixelForValue(futureStartIndex);
+        const label = pluginOptions.label || '預測開始';
+
+        const fontSize = pluginOptions.fontSize || 12;
+        const paddingX = 6;
+        const paddingY = 4;
+        const radius = pluginOptions.borderRadius || 6;
+
+        ctx.save();
+        ctx.font = `${fontSize}px "Microsoft JhengHei", sans-serif`;
+        const textWidth = ctx.measureText(label).width;
+        const rectWidth = textWidth + paddingX * 2;
+        const rectHeight = fontSize + paddingY * 2;
+
+        let rectX = xPos - rectWidth / 2;
+        const rectY = ca.top + 6;
+        if (rectX < ca.left) rectX = ca.left + 2;
+        if (rectX + rectWidth > ca.right) rectX = ca.right - rectWidth - 2;
+
+        ctx.fillStyle = pluginOptions.backgroundColor || 'rgba(255,77,77,0.96)';
+        const r = radius;
+        ctx.beginPath();
+        ctx.moveTo(rectX + r, rectY);
+        ctx.lineTo(rectX + rectWidth - r, rectY);
+        ctx.quadraticCurveTo(rectX + rectWidth, rectY, rectX + rectWidth, rectY + r);
+        ctx.lineTo(rectX + rectWidth, rectY + rectHeight - r);
+        ctx.quadraticCurveTo(rectX + rectWidth, rectY + rectHeight, rectX + rectWidth - r, rectY + rectHeight);
+        ctx.lineTo(rectX + r, rectY + rectHeight);
+        ctx.quadraticCurveTo(rectX, rectY + rectHeight, rectX, rectY + rectHeight - r);
+        ctx.lineTo(rectX, rectY + r);
+        ctx.quadraticCurveTo(rectX, rectY, rectX + r, rectY);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = pluginOptions.color || '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, rectX + rectWidth / 2, rectY + rectHeight / 2);
+        ctx.restore();
+      }
+    };
+
+    // x 軸：同日顯示時間；換日的第一個顯示日期
+    function tickCrossDayShowFull(value, index, ticks){
+      const raw = this.getLabelForValue(value);  // e.g. "02-02 23:29"
+      if (!raw) return "";
+
+      const [datePart, timePart] = String(raw).split(" ");
+      if (!datePart) return String(raw);
+
+      // ✅ 第一個 tick：顯示完整 "MM-DD HH:MM"
+      if (index === 0) return timePart ? `${datePart} ${timePart}` : datePart;
+
+      // 前一個 tick 的日期
+      const prevRaw = this.getLabelForValue(ticks[index - 1]?.value);
+      const prevDate = prevRaw ? String(prevRaw).split(" ")[0] : "";
+
+      // ✅ 換日點：只顯示 "MM-DD"（解法三，縮短避免重疊）
+      if (prevDate && prevDate !== datePart){
+        return datePart;
+      }
+
+      // ✅ 同日：只顯示時間
+      return timePart || "";
+    }
+
+    function makeSmartXTicks(labels, maxShow = 12){
+      // labels: ["02-02 09:16", ...]
+      const n = labels.length;
+      if (n === 0) return new Set();
+
+      // 找出「跨日點」的 indices（日期跟前一筆不同）
+      const dayBreaks = [];
+      for (let i = 1; i < n; i++){
+        const d1 = String(labels[i-1]).split(" ")[0];
+        const d2 = String(labels[i]).split(" ")[0];
+        if (d1 && d2 && d1 !== d2) dayBreaks.push(i);
+      }
+
+      // 先把必顯示的 index 放進集合：第一個 + 所有跨日點 + 最後一個
+      const keep = new Set([0, n-1, ...dayBreaks]);
+
+      // 再用等距補滿到 maxShow
+      const remain = Math.max(0, maxShow - keep.size);
+      if (remain > 0){
+        const step = Math.max(1, Math.floor(n / (remain + 1)));
+        for (let i = step; i < n-1 && keep.size < maxShow; i += step){
+          keep.add(i);
+        }
+      }
+      return keep;
+    }
+
+
+    const createChartConfig = (label, color) => ({
+      type:'line',
+      data:{
+        labels:[],
+        datasets:[
+          {
+            label: `${label}（實際）`,
+            data:[],
+            borderColor:color,
+            backgroundColor:color,
+            fill:false,
+            tension:0.3,
+            spanGaps:true
+          },
+          {
+            label: `${label}（預測）`,
+            data:[],
+            borderColor:color,
+            backgroundColor:color,
+            fill:false,
+            tension:0.3,
+            spanGaps:true,
+            borderDash:[6,6],
+            hidden:true
+          }
+        ]
+      },
+      plugins:[shadeFuturePlugin, forecastTagPlugin, dayChangeTagPlugin],
+      options:{
+        responsive:true, maintainAspectRatio:false, animation:false,
+        scales:{
+          x:{
+            type:'category',
+
+            /*afterBuildTicks: (scale) => {
+              const labels = scale?.chart?.data?.labels || [];
+              const keep = makeSmartXTicks(labels, 10);   // 最多顯示 10 個（可調 8~12）
+
+              // scale.ticks 裡的 tick.value 是 category index
+              scale.ticks = (scale.ticks || []).filter(t => keep.has(t.value));
+            },*/
+
+            ticks:{
+              color:'#fff',
+              maxRotation:0,
+              minRotation:0,
+              font:{size:18},
+              autoSkip: true,
+              maxTicksLimit: 12,          // ✅ 建議 8~12 之間，避免擠
+              callback: function(value, index, ticks){
+                const raw = this.getLabelForValue(value); // "MM-DD HH:MM"
+                if (!raw) return "";
+
+                const [datePart, timePart] = String(raw).split(" ");
+                if (!datePart) return String(raw);
+
+                // 第一個顯示的 tick：顯示完整
+                if (index === 0) return timePart ? `${datePart} ${timePart}` : datePart;
+
+                // 若這個 tick 的日期跟前一個「顯示出來的 tick」不同 => 跨日（或跳過中間很多點）
+                const prevRaw = this.getLabelForValue(ticks[index - 1]?.value);
+                const prevDate = prevRaw ? String(prevRaw).split(" ")[0] : "";
+
+                // ✅ 只要偵測到日期變了，就顯示完整日期+時間
+                if (prevDate && prevDate !== datePart){
+                  return timePart ? `${datePart} ${timePart}` : datePart;
+                }
+
+                // ✅ 同日只顯示時間
+                return timePart || "";
+              }
+            },
+            grid:{ color:'#444' }
+          },
+          y:{ beginAtZero:false, ticks:{ color:'#fff' ,font:{size:18} ,callback: (v) => Number(v).toFixed(1),autoSkip: true,maxTicksLimit: 8}, grid:{ color:'#444' }}
+        },
+        plugins:{
+          legend:{ labels:{ color:'#fff' } },
+          shadeFuture:{ futureStartIndex:-1 },
+          forecastTag:{ futureStartIndex:-1, label:'預測開始' },
+          dayChangeTag:{
+            lineColor:'rgba(0,191,255,0.65)',
+            labelBg:'rgba(0,191,255,0.65)'
+          }
+        }
+      }
+    });
+
+    const tempChart = new Chart(document.getElementById('tempChart'), createChartConfig("溫度 (°C)", "#ff6384"));
+    const orpChart  = new Chart(document.getElementById('orpChart'),  createChartConfig("氧化還原電位 (mV)", "#9966ff"));
+    const phChart   = new Chart(document.getElementById('phChart'),   createChartConfig("pH", "#ffcd56"));
+    const doChart   = new Chart(document.getElementById('doChart'),   createChartConfig("溶氧 (mg/L)", "#4bc0c0")); // ★★★ 修正 2：修正函式名稱筆誤
+    // ===== 新版預測配色（對齊 data_prediction.html）=====
+    const BASE_COLORS = {
+      temperature: "#ff6384",
+      orp: "#9966ff",
+      ph: "#ffcd56",
+      do_level: "#4bc0c0"
+    };
+
+    const PRED_COLORS = {
+      temperature: { actualLine: '#ff6b81', predLine: '#ffb3c1' },
+      orp:         { actualLine: '#a97aff', predLine: '#d0b3ff' },
+      ph:          { actualLine: '#ffc233', predLine: '#ffe08a' },
+      do_level:    { actualLine: '#2ed0d0', predLine: '#8be6e6' }
+    };
+
+    function chartKeyOf(chart){
+      const id = chart?.canvas?.id;
+      if (id === "tempChart") return "temperature";
+      if (id === "orpChart")  return "orp";
+      if (id === "phChart")   return "ph";
+      if (id === "doChart")   return "do_level";
+      return null;
+    }
+
+    // ★預測模式：y 軸顯示兩位小數；回歷史模式：還原原本設定
+    function setTwoDecimalTicks(chart, enabled){
+      const y = chart?.options?.scales?.y;
+      if (!y || !y.ticks) return;
+
+      if (enabled){
+        if (chart._origYTickCb === undefined) chart._origYTickCb = y.ticks.callback;
+        y.ticks.callback = (value) => Number(value).toFixed(1);
+      } else {
+        if (chart._origYTickCb !== undefined) y.ticks.callback = chart._origYTickCb;
+      }
+    }
+
+    // ★預測模式：改成新版雙色（實際深、預測淺），不使用虛線
+    function applyPredictionStyle(chart, key){
+      const c = PRED_COLORS[key];
+      if (!c) return;
+
+      chart.data.datasets[0].borderColor = c.actualLine;
+      chart.data.datasets[0].backgroundColor = c.actualLine;
+
+      chart.data.datasets[1].borderColor = c.predLine;
+      chart.data.datasets[1].backgroundColor = c.predLine;
+      chart.data.datasets[1].borderDash = [];  // 新版：不用虛線
+
+      // 新版點比較明顯
+      chart.data.datasets[0].pointRadius = 4;
+      chart.data.datasets[1].pointRadius = 4;
+    }
+
+    // ★回到歷史模式：顏色還原、預測線回預設（隱藏）
+    function restoreBaseStyle(chart, key){
+      const base = BASE_COLORS[key];
+      if (!base) return;
+
+      // dataset[0] 一定要還原
+      if (chart.data.datasets[0]) {
+        chart.data.datasets[0].borderColor = base;
+        chart.data.datasets[0].backgroundColor = base;
+
+        // 歷史模式顯示點（你現在要點回來）
+        chart.data.datasets[0].pointRadius = 3;
+        chart.data.datasets[0].pointHoverRadius = 5;
+      }
+
+      // dataset[1] 可能已經被移除（歷史模式要隱藏 legend）
+      const ds1 = chart.data.datasets[1];
+      if (ds1){
+        ds1.borderColor = base;
+        ds1.backgroundColor = base;
+        ds1.borderDash = [6,6];
+        ds1.pointRadius = 0;
+        ds1.pointHoverRadius = 0;
+      }
+    }
+
+    function ensurePredDataset(chart, key){
+      if (!chart.data.datasets[1]) {
+        const base = BASE_COLORS[key] || "#999";
+        chart.data.datasets.push({
+          label: "（預測）",
+          data: [],
+          borderWidth: 2,
+          borderColor: base,
+          backgroundColor: base,
+          pointRadius: 0,
+          tension: 0.35,
+          hidden: false
+        });
+      }
+    }
+
+    function removePredDataset(chart){
+      if (chart.data.datasets.length > 1) {
+        chart.data.datasets.splice(1, 1);
+      }
+    }
+
+    // ===== 即時狀態彈窗（防止一直跳）=====
+    let lastRealtimePopupKey = null;      // 記錄上次彈出的狀態key
+    let lastRealtimePopupAt = 0;          // 簡單節流（毫秒）
+
+    function showRealtimeStatusModal(message){
+      const msgEl = document.getElementById("realtimeStatusModalMsg");
+      if (msgEl) msgEl.textContent = message;
+
+      const modalEl = document.getElementById("realtimeStatusModal");
+      if (!modalEl) return;
+
+      const m = bootstrap.Modal.getOrCreateInstance(modalEl);
+      m.show();
+    }
+
+    /**
+     * 只在「狀態真的變了」才彈，並做節流避免短時間連跳。
+     * key 建議用 state + minutes_ago 組合，避免每次 last_ts 字串不同就一直彈。
+     */
+    function maybePopupRealtimeStatus(pondName, s, message){
+      const now = Date.now();
+      if (now - lastRealtimePopupAt < 1500) return; // 1.5 秒節流
+
+      const state = s?.state || "no_data";
+      const mins  = (typeof s?.minutes_ago === "number") ? s.minutes_ago : -1;
+
+      // key 用 state+mins 避免 last_ts 每次變就一直彈
+      const key = `${pondName}|${state}|${mins}`;
+
+      // ✅ 首次進頁面：一定彈一次（每次重新整理都算首次）
+      const firstLoad = !sessionStorage.getItem("rt_popup_shown");
+      // ✅ 平常：只有異常/延遲/無資料才彈
+      const abnormal = (state === "stale" || state === "offline" || state === "no_data");
+
+      if ((firstLoad || abnormal) && key !== lastRealtimePopupKey){
+        lastRealtimePopupKey = key;
+        lastRealtimePopupAt = now;
+
+        // 記住「本次載入」已彈過（重新整理會清掉，會再彈一次）
+        sessionStorage.setItem("rt_popup_shown", "1");
+
+        showRealtimeStatusModal(message);
+      }
+    }
+
+
+
+    // ---- Mode switch (history / prediction) ----
+    let currentMode = "history";
+    const predictionCache = {}; // { [pondName]: { chart_data, futureStartIndex } }
+
+    function setMode(mode){
+      currentMode = mode;
+
+      const hBtn = document.getElementById("modeHistoryBtn");
+      const pBtn = document.getElementById("modePredBtn");
+      if (hBtn && pBtn){
+        hBtn.classList.toggle("active", mode === "history");
+        pBtn.classList.toggle("active", mode === "prediction");
+      }
+
+      // 切換後立刻刷新目前池子圖表
+      const pond = pondSelect?.value;
+      if (pond) updateCharts(pond);
+    }
+
+    function resetPredictionVisual(chart){
+      // 關閉預測區效果
+      if (chart?.options?.plugins?.shadeFuture) chart.options.plugins.shadeFuture.futureStartIndex = -1;
+      if (chart?.options?.plugins?.forecastTag) chart.options.plugins.forecastTag.futureStartIndex = -1;
+
+      // 還原 y 軸 tick callback（避免歷史也固定兩位小數）
+      setTwoDecimalTicks(chart, false);
+
+      // 先還原顏色（此時 dataset[1] 可能還在）
+      const key = chartKeyOf(chart);
+      if (key) restoreBaseStyle(chart, key);
+
+      // 最後再移除預測 dataset，讓 legend 歷史模式不出現（預測）那條
+      removePredDataset(chart);
+    }
+
+    function applyHistoryData(pondName){
+      const data = chartData[pondName];
+      if (!data) { console.warn("No data for pond:", pondName); return; }
+
+      const labels = data.timestamp || [];
+      const emptyHint = document.getElementById("emptyHint");
+      const isFallback = !!data.fallback_used;
+
+      // 狀態列 + 虛線（僅影響實際線）
+      renderStatus(pondName);
+      const st = pondStatus?.[pondName]?.state;
+      const isStale = (st === "stale" || st === "offline");
+      applyStaleStyle(tempChart, isStale);
+      applyStaleStyle(orpChart,  isStale);
+      applyStaleStyle(phChart,   isStale);
+      applyStaleStyle(doChart,   isStale);
+
+      // 關掉預測視覺
+      resetPredictionVisual(tempChart);
+      resetPredictionVisual(orpChart);
+      resetPredictionVisual(phChart);
+      resetPredictionVisual(doChart);
+
+      // 區間完全沒資料：顯示提示 + 清空圖
+      if (labels.length === 0) {
+        if (emptyHint) {
+          const s = pondStatus?.[pondName];
+          const lastMsg = (s && s.last_ts) ? `最後更新：${s.last_ts}（${s.minutes_ago} 分鐘前）` : "最後更新時間未知";
+          emptyHint.style.display = "block";
+          emptyHint.textContent = `此時間區間沒有資料。${lastMsg}。建議切換到近 24 小時或調整查詢區間。`;
+        }
+
+        tempChart.data.labels = []; tempChart.data.datasets[0].data = [];
+        orpChart.data.labels  = []; orpChart.data.datasets[0].data  = [];
+        phChart.data.labels   = []; phChart.data.datasets[0].data   = [];
+        doChart.data.labels   = []; doChart.data.datasets[0].data   = [];
+        tempChart.update(); orpChart.update(); phChart.update(); doChart.update();
+
+        const cp = document.getElementById('currentPond'); if (cp) cp.textContent = pondName;
+        return;
+      }
+
+      // 有資料：決定要不要顯示提示（fallback 只回傳 1 點）
+      if (emptyHint) {
+        if (isFallback) {
+          emptyHint.style.display = "block";
+          emptyHint.textContent = data.fallback_note || "此區間無資料，已改用最接近的資料點顯示。";
+        } else {
+          emptyHint.style.display = "none";
+        }
+      }
+
+      // 更新圖表（實際線）
+      tempChart.data.labels = labels; tempChart.data.datasets[0].data = data.temperature || [];
+      orpChart.data.labels  = labels; orpChart.data.datasets[0].data  = data.orp          || [];
+      phChart.data.labels   = labels; phChart.data.datasets[0].data   = data.ph           || [];
+      doChart.data.labels   = labels; doChart.data.datasets[0].data   = data.do_level     || [];
+      tempChart.update(); orpChart.update(); phChart.update(); doChart.update();
+
+      const cp = document.getElementById('currentPond'); if (cp) cp.textContent = pondName;
+    }
+
+    function applyPredictionData(pondName, payload){
+      // 相容兩種格式：
+      // (A) 舊 API：payload.chart_data = { labels, real:{temperature..}, pred:{temperature..} }, payload.futureStartIndex
+      // (B) 新 API：payload.chart_data = { temp:{labels,real,pred,futureIndex}, orp:{...}, ph:{...}, do:{...} }
+
+      const cd = payload?.chart_data || {};
+
+      renderStatus(pondName);
+
+      const emptyHint = document.getElementById("emptyHint");
+
+      // 將資料統一成 {labels, real[], pred[], futureIndex}
+      function normalizeSeries(oldKey, newKey){
+        // 舊格式（共用 labels）
+        if (Array.isArray(cd.labels) && cd.real && cd.pred){
+          const labels = cd.labels || [];
+          const realArr = cd.real?.[oldKey] || [];
+          const predArr = cd.pred?.[oldKey] || [];
+
+          // 每張圖各自用 pred 的第一個非空位置當 futureIndex（新版邏輯）
+          let futureIndex = predArr.findIndex(v => v !== null && v !== undefined);
+          if (futureIndex < 0 && typeof payload?.futureStartIndex === "number") {
+            futureIndex = payload.futureStartIndex;
+          }
+          if (futureIndex < 0) futureIndex = -1;
+
+          return { labels, real: realArr, pred: predArr, futureIndex };
+        }
+
+        // 新格式（每個指標各自一包）
+        const d = cd?.[newKey] || cd?.[oldKey] || null;
+        if (!d) return { labels: [], real: [], pred: [], futureIndex: -1 };
+
+        const labels = d.labels || [];
+        const realArr = d.real || [];
+        const predArr = d.pred || [];
+        let futureIndex = (typeof d.futureIndex === "number") ? d.futureIndex : -1;
+
+        if (futureIndex < 0){
+          const i = predArr.findIndex(v => v !== null && v !== undefined);
+          futureIndex = i >= 0 ? i : -1;
+        }
+
+        return { labels, real: realArr, pred: predArr, futureIndex };
+      }
+
+      const S_TEMP = normalizeSeries("temperature", "temp");
+      const S_ORP  = normalizeSeries("orp",         "orp");
+      const S_PH   = normalizeSeries("ph",          "ph");
+      const S_DO   = normalizeSeries("do_level",    "do");
+
+      // 判斷完全沒資料
+      const anyLabels = (S_TEMP.labels?.length || S_ORP.labels?.length || S_PH.labels?.length || S_DO.labels?.length) > 0;
+      if (!anyLabels){
+        if (emptyHint){
+          emptyHint.style.display = "block";
+          emptyHint.textContent = "預測模式目前沒有資料（可能尚未產生 prediction_results 或近 30 分鐘無實測資料）。";
+        }
+
+        // 清空 + 還原
+        [tempChart, orpChart, phChart, doChart].forEach(ch => {
+          const key = chartKeyOf(ch);
+          ch.data.labels = [];
+          ch.data.datasets[0].data = [];
+          if (ch.data.datasets[1]) { ch.data.datasets[1].data = []; ch.data.datasets[1].hidden = true; }
+          if (ch.options?.plugins?.shadeFuture) ch.options.plugins.shadeFuture.futureStartIndex = -1;
+          if (ch.options?.plugins?.forecastTag) ch.options.plugins.forecastTag.futureStartIndex = -1;
+          setTwoDecimalTicks(ch, false);
+          if (key) restoreBaseStyle(ch, key);
+          ch.update();
+        });
+        return;
+      }
+
+      if (emptyHint) emptyHint.style.display = "none";
+
+      function applyOne(chart, key, series){
+        chart.data.labels = series.labels || [];
+
+        const realArr = (series.real || []).slice();
+        const predArr = (series.pred || []).slice();
+
+        // 1) 找最後一個實際值位置
+        const lastRealIndex = (() => {
+          for (let i = realArr.length - 1; i >= 0; i--) {
+            const v = realArr[i];
+            if (v !== null && v !== undefined) return i;
+          }
+          return -1;
+        })();
+
+        // 2) 找第一個預測值位置
+        const firstPredIndex = (() => {
+          for (let i = 0; i < predArr.length; i++) {
+            const v = predArr[i];
+            if (v !== null && v !== undefined) return i;
+          }
+          return -1;
+        })();
+
+        // 3) 預測開始點：對齊最後實際值
+        //    並把 pred 在這個點補上 real 值，讓兩條線接起來
+        let futureStart = lastRealIndex;
+        if (futureStart >= 0) {
+          // 確保 pred 陣列長度足夠
+          while (predArr.length <= futureStart) predArr.push(null);
+          predArr[futureStart] = realArr[futureStart];
+        }
+
+        // 如果沒有實際值（極少數），就退回舊策略：用第一個預測值
+        if (futureStart < 0) futureStart = firstPredIndex;
+
+        chart.data.datasets[0].data = realArr;
+        ensurePredDataset(chart, key);     
+        chart.data.datasets[1].data = predArr;
+        chart.data.datasets[1].hidden = false;
+
+        // ★ 預測區與標籤：從「最後實際值」開始
+        chart.options.plugins.shadeFuture.futureStartIndex = futureStart;
+        chart.options.plugins.forecastTag.futureStartIndex = futureStart;
+
+        // 新版：兩位小數 + 雙色線
+        setTwoDecimalTicks(chart, true);
+        applyPredictionStyle(chart, key);
+        chart.data.datasets[0].borderDash = [];
+
+        chart.update();
+      }
+
+
+      applyOne(tempChart, "temperature", S_TEMP);
+      applyOne(orpChart,  "orp",         S_ORP);
+      applyOne(phChart,   "ph",          S_PH);
+      applyOne(doChart,   "do_level",    S_DO);
+
+      const cp = document.getElementById('currentPond'); 
+      if (cp) cp.textContent = pondName;
+    }
+
+
+    async function loadAndRenderPrediction(pondName){
+      if (predictionCache[pondName]){
+        applyPredictionData(pondName, predictionCache[pondName]);
+        return;
+      }
+
+      // 顯示提示
+      const bar = document.getElementById("statusBar");
+      if (bar){
+        bar.className = "alert alert-warning py-2";
+        bar.textContent = `【${pondName}】趨勢預測計算中…`;
+      }
+
+      try{
+        const resp = await fetch(`/api/prediction?pond_id=${encodeURIComponent(pondName)}`, { credentials: "same-origin" });
+        const json = await resp.json();
+        if (!resp.ok || json.error){
+          throw new Error(json.error || `HTTP ${resp.status}`);
+        }
+
+        // 後端欄位名稱：futureStartIndex（或 futureStartIndex）
+        const payload = {
+          chart_data: json.chart_data,
+          futureStartIndex: (typeof json.futureStartIndex === "number") ? json.futureStartIndex : -1
+        };
+        predictionCache[pondName] = payload;
+
+        applyPredictionData(pondName, payload);
+      }catch(err){
+        console.error(err);
+        if (bar){
+          bar.className = "alert alert-danger py-2";
+          bar.textContent = `【${pondName}】預測載入失敗：${err.message || err}`;
+        }
+        // 失敗時退回歷史模式（避免畫面卡住）
+        setMode("history");
+      }
+    }
+
+    function updateCharts(pondName){
+      if (currentMode === "prediction"){
+        loadAndRenderPrediction(pondName);
+      } else {
+        applyHistoryData(pondName);
+      }
+    }
+
+    // 綁定模式按鈕
+    document.getElementById("modeHistoryBtn")?.addEventListener("click", () => setMode("history"));
+    document.getElementById("modePredBtn")?.addEventListener("click", () => setMode("prediction"));
+
+    // ===== 即時狀態彈窗觸發控制 =====
+    const RT_POPUP_PENDING_KEY = "rt_popup_pending";     // 時間範圍套用後觸發
+    const RT_POPUP_FROMREF_KEY = "rt_popup_fromref_done"; // 從其他頁面切回來只觸發一次
+
+    function markRealtimePopupPending(){
+      try { sessionStorage.setItem(RT_POPUP_PENDING_KEY, "1"); } catch(e){}
+    }
+
+    function cameFromOtherPage(){
+      try{
+        if (!document.referrer) return false;
+        const ref = new URL(document.referrer);
+        if (ref.origin !== location.origin) return false;         // 只接受同站內
+        if (ref.pathname === location.pathname) return false;     // 同頁 refresh 不算
+        return true;
+      }catch(e){
+        return false;
+      }
+    }
+
+    function buildRealtimeStatusMessage(pondName){
+      const s = pondStatus?.[pondName];
+
+      if (!s || s.state === "no_data") {
+        return `【${pondName}】目前沒有任何資料（可能尚未成功寫入資料庫）`;
+      }
+
+      if (s.state === "ok") {
+        return `【${pondName}】即時資料正常（最後更新：${s.last_ts}，${s.minutes_ago} 分鐘前）`;
+      } else if (s.state === "stale") {
+        return `【${pondName}】資料延遲（最後更新：${s.last_ts}，${s.minutes_ago} 分鐘前）— 可能是 API 暫時不穩`;
+      } else {
+        return `【${pondName}】資料中斷（最後更新：${s.last_ts}，${s.minutes_ago} 分鐘前）— 建議稍後再試或查看網路/ingestor`;
+      }
+    }
+
+    function maybeShowRealtimeStatusPopup(pondName){
+      let shouldShow = false;
+
+      // A) 使用者剛按下「選擇時間範圍 → 套用」
+      const pending = (sessionStorage.getItem(RT_POPUP_PENDING_KEY) === "1");
+      if (pending) shouldShow = true;
+
+      // B) 從其他頁面切回 dashboard（每次「切回來」只顯示一次）
+      const fromOther = cameFromOtherPage();
+      const fromOtherNotDone = (sessionStorage.getItem(RT_POPUP_FROMREF_KEY) !== "1");
+      if (fromOther && fromOtherNotDone) shouldShow = true;
+
+      if (!shouldShow) return;
+
+      // 彈窗內容
+      window.alert(buildRealtimeStatusMessage(pondName));
+
+      // 清除旗標
+      if (pending) sessionStorage.removeItem(RT_POPUP_PENDING_KEY);
+      if (fromOther && fromOtherNotDone) sessionStorage.setItem(RT_POPUP_FROMREF_KEY, "1");
+    }
+
+    function renderStatus(pondName){
+      const bar = document.getElementById("statusBar");
+      const s = pondStatus?.[pondName];
+
+      let cls = "alert alert-secondary py-2";
+      let msg = `【${pondName}】目前沒有任何資料（可能尚未成功寫入資料庫）`;
+
+      if (s && s.state !== "no_data") {
+        if (s.state === "ok") {
+          cls = "alert alert-success py-2";
+          msg = `【${pondName}】即時資料正常（最後更新：${s.last_ts}，${s.minutes_ago} 分鐘前）`;
+        } else if (s.state === "stale") {
+          cls = "alert alert-warning py-2";
+          msg = `【${pondName}】資料延遲（最後更新：${s.last_ts}，${s.minutes_ago} 分鐘前）— 可能是 API 暫時不穩`;
+        } else {
+          cls = "alert alert-danger py-2";
+          msg = `【${pondName}】資料中斷（最後更新：${s.last_ts}，${s.minutes_ago} 分鐘前）— 建議稍後再試或查看網路/ingestor`;
+        }
+      }
+
+      // ✅ 有 statusBar 就更新，沒有也不影響彈窗
+      if (bar){
+        bar.className = cls;
+        bar.textContent = msg;
+      }
+
+      // ✅ 只在「套用時間範圍」或「從其他頁切回」時才彈
+      maybeShowRealtimeStatusPopup(pondName);
+    }
+
+
+
+
+    // ---- 初始：先用 URL 參數/偏好 同步首頁下拉，再更新圖表 ----
+    (function syncPondSelectOnLoad(){
+      const urlPond = getQS('pond_id');
+      const prefs   = loadPrefs();
+      if (urlPond && optionExists(pondSelect, urlPond)) {
+        pondSelect.value = urlPond;
+      } else if (prefs.pond && optionExists(pondSelect, prefs.pond)) {
+        pondSelect.value = prefs.pond;
+      }
+    })();
+
+    if (pondNames.length){
+      if (!chartData[pondSelect.value]) pondSelect.value = pondNames[0];
+        updateCharts(pondSelect.value);
+    } else {
+      console.warn("chart_data 為空，無資料可顯示");
+    }
+
+    // 下拉切換：如果前端沒有該池資料 → 重新導向帶參數；有資料就地更新，同時記憶池子
+    pondSelect?.addEventListener('change', () => {
+      const pond = pondSelect.value;
+      const prefs = loadPrefs();
+      savePrefs(pond, prefs.start, prefs.end, prefs.newtab); // 記住目前池子，彈窗會帶到
+      if (currentMode === "prediction") {
+        updateCharts(pond);
+      } else if (chartData && chartData[pond]) {
+        updateCharts(pond);
+      } else {
+        const s = prefs.start || getQS('start');
+        const e = prefs.end   || getQS('end');
+        navigateDashboardWithRange(pond, s, e);
+      }
+    });
+
+    // 手機：offcanvas 的「數據查看」要走跟桌機同一套
+    document.getElementById("toHistoryBtnMobile")?.addEventListener("click", (e)=>{
+      e.preventDefault();
+      document.getElementById("toHistoryBtn")?.click(); // 直接沿用你原本的行為
+    });
+
+    // 手機：offcanvas 點「選擇時間範圍」 -> 先關 offcanvas 再開 modal
+    document.getElementById("openTimeRangeBtnMobile")?.addEventListener("click", ()=>{
+      const offEl = document.getElementById("mobileNavDash");
+      const off = bootstrap.Offcanvas.getOrCreateInstance(offEl);
+      off.hide();
+
+      // 等 offcanvas 收起後再開 modal（避免疊在一起怪怪的）
+      setTimeout(()=>{
+        const modalEl = document.getElementById("historyTimeModal");
+        const m = bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.show();
+      }, 250);
+    });
+
+  </script>
+</body>
+</html>

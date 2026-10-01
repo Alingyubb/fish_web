@@ -1,0 +1,793 @@
+<!DOCTYPE html>  
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>即時狀態</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* =========================
+        📌 全局變數
+    ========================== */
+    :root{
+      --bg:#142132; --panel:#0f1c2c; --accent:#00bfff; 
+      --text:#e8f6ff; --muted:#9bd1ff; --line:rgba(0,191,255,.25);
+      --blue:#1ea7ff; --blue-strong:#158ae0;
+      --right-w:560px; --main-gap:12px; --kv-height:460px;
+      --kv-value-max:240px; --kv-pill-h:72px; --kv-scale:1;
+    }
+
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:"Segoe UI","Noto Sans TC",system-ui,-apple-system,Arial,sans-serif;
+    }
+
+    /* =========================
+        📌 Header
+    ========================== */
+    .header-bar{
+      display:flex; align-items:center; justify-content:space-between;
+      background:var(--panel);
+      border-bottom:2px solid var(--accent);
+      padding:10px 20px;
+      position:sticky; top:0; z-index:10;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .dashboard-title{
+      font-size:1.6rem;
+      padding:14px 0;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-shadow: 0 0 18px rgba(0,191,255,.25);
+      white-space: nowrap;
+    }
+    .nav-btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      background:#007BFF;
+      color:#fff !important;
+      padding:8px 12px;
+      border-radius:10px;
+      text-decoration:none;
+      font-weight:700;
+      box-shadow:0 2px 6px rgba(0,0,0,.3);
+      border: 1px solid rgba(255,255,255,.06);
+      height:44px;
+    }
+    .nav-btn:hover{ background:#0056b3; }
+
+    .hamburger-btn{
+      padding:6px; color:var(--muted); border:1px solid透明;
+    }
+    .hamburger-btn:hover{
+      color:var(--text); background-color:rgba(255,255,255,0.1);
+    }
+
+    /* =========================
+        📌 主內容區
+    ========================== */
+    .main{
+      display:flex; 
+      gap:var(--main-gap);
+      padding:10px 12px;
+      box-sizing:border-box;
+      height:auto;
+      overflow:visible;
+    }
+    .left{ 
+      flex: 1 1 auto; min-width:0; 
+      display:flex; flex-direction:column; gap:10px; overflow:hidden; 
+    }
+    .right{ 
+      flex:0 0 var(--right-w); width:var(--right-w); min-width:var(--right-w);
+      display:grid;  gap:10px; grid-template-rows: auto 1fr 1fr;
+    }
+
+    .pond-tabs{ display:flex; gap:10px; }
+    .tab{ 
+      flex:1; text-align:center; background:#15314a; color:#dff3ff;
+      border:1px solid var(--line); border-radius:10px; padding:8px 10px;
+      cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.25) inset;
+      user-select:none; font-size:14px; font-weight:700;
+    }
+    .tab.active{ 
+      background:var(--blue); color:#001722; 
+      border-color:transparent; font-weight:800; 
+    }
+
+    .video-card{ 
+      background:var(--panel); border:1px solid var(--line); border-radius:14px;
+      box-shadow:0 8px 22px rgba(0,0,0,.35), 0 0 0 1px rgba(0,191,255,.06) inset;
+      padding:10px; display:flex; flex-direction:column; gap:8px; flex:1; min-height:0; 
+    }
+
+    .video-shell{
+      width:100%;
+      aspect-ratio: 16 / 9;   /* ✅ 固定 16:9 */
+      height:auto;            /* ✅ 不要用 80vh 撐高 */
+      background:#000;
+      border-radius:10px;
+      overflow:hidden;
+    }
+
+    .video-shell img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      object-position:center;
+      display:block;
+    }
+
+    .card{
+      background:var(--panel); border:1px solid var(--line); border-radius:16px;
+      box-shadow:0 8px 22px rgba(0,0,0,.35), 0 0 0 1px rgba(0,191,255,.06) inset;
+      display:flex; flex-direction:column; min-height:0;
+    }
+
+    .card-head{ 
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px; border-bottom:1px solid var(--line); 
+    }
+    .card-head h2{ margin:0; font-size:35px; }
+
+    .card-body{ 
+      padding:10px 12px; display:flex; flex-direction:column; 
+      gap:10px; min-height:0; flex: 1; 
+    }
+    #behaviorCard,
+    #feedCard,
+    #waterStatusPanel{
+      cursor: pointer;
+    }
+
+    .kv-wrap{
+      background:#0ea8d0; border-radius:22px; padding:14px 18px;
+      min-height:var(--kv-height); height: auto; flex: 1;
+      display:flex; flex-direction:column; gap:12px; overflow:hidden;
+    }
+    .kv-row{ 
+      display:grid; grid-template-columns:1fr minmax(180px, min(var(--kv-value-max),100%)); 
+      gap:16px; align-items:center; height: auto; flex: 1;
+    }
+    .kv-label{ color:#f3fbff; font-weight:800; font-size:calc(28px * var(--kv-scale)); }
+    .kv-value{
+      height:var(--kv-pill-h); background:#fff; color:#0b1a2c;
+      border-radius:28px; display:flex; align-items:center; justify-content:center;
+      font-size:calc(20px * var(--kv-scale)); font-weight:800;
+      gap:4px;
+    }
+
+    /* ✨ 水質數值字體與異常顏色 */
+    .value-num{
+      font-size:1.3rem;
+      font-weight:800;
+      color:#0b1a2c;
+    }
+    .value-num.bad{
+      color:#ff4d6a;  /* 異常 → 紅色 */
+    }
+
+    .status-card{
+      display:flex;
+      flex-direction:column;
+    }
+    /* 行為狀態卡片可點效果 */
+    .status-card.clickable{
+      cursor:pointer;
+      transition:all .15s ease-out;
+    }
+    .status-card.clickable:hover{
+      box-shadow:0 0 0 1px rgba(255,255,255,.25);
+      transform:translateY(-1px);
+    }
+
+    .status-pane{
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      padding:16px 10px;
+    }
+    .status-title{ font-size:25px; color:#f3fbff;}
+    .status-value{ font-size:30px; font-weight:900; color:#1f9e55; }
+    .status-value.abnormal{ color:#ff6b6b; }
+
+    /* =========================
+        📌 RWD
+    ========================== */
+    @media (max-width:992px){ 
+      .header-bar{ padding:10px 15px; }
+
+      html,body{
+        height:auto !important;
+        overflow-y:auto !important;
+      }
+
+      .main{
+        display:flex !important;
+        flex-direction:column !important;
+        width:100% !important;
+        height:auto ;
+        overflow:visible ;
+      }
+
+      .left,
+      .right{
+        width:100% ;
+        min-width:100% ;
+      }
+
+      .right{
+        display:block ;
+        height:auto ;
+        grid-template-rows:none ;
+        margin-top:12px;
+      }
+
+      .card{
+        width:100% ;
+        height:auto ;
+        margin-bottom:12px;
+      }
+
+      .card-body{
+        display:block ;
+        height:auto ;
+        min-height:auto ;
+      }
+
+      .kv-wrap{
+        height:auto ;
+        min-height:auto ;
+        flex:none ;
+      }
+
+      .video-shell{
+        aspect-ratio:1/1;
+        height:auto ;
+      }
+
+      .status-pane{
+        min-height:80px ;
+        padding:12px 8px ;
+        gap:4px;
+        display:flex;
+        justify-content:center;
+        align-items:center;
+      }
+
+      .status-title{ font-size:18px  }
+      .status-value{ font-size:22px  }
+
+      .kv-wrap{
+        padding: 10px 12px;      /* 原本 14px 18px */
+        border-radius: 18px;
+        gap: 10px;               /* 原本 12px */
+      }
+
+      /* ✅ 一列：左邊 label 固定窄寬，右邊數值吃剩下（避免 label 直排） */
+      .kv-row{
+        grid-template-columns: 72px 1fr; /* 原本 1fr + minmax(...) */
+        gap: 10px;                       /* 原本 16px */
+      }
+
+      /* ✅ label 字變小、不要直排 */
+      .kv-label{
+        font-size: 18px;          /* 原本約 28px * scale */
+        line-height: 1.1;
+        white-space: nowrap;      /* 關鍵：避免「酸鹼值」被擠成直排 */
+      }
+
+      /* ✅ 數值 pill 變矮、字變小 */
+      .kv-value{
+        height: 44px;             /* 原本 72px */
+        width: 150px; ;
+        margin-left: auto;
+        margin-right: 0;
+        border-radius: 16px;
+        font-size: 16px;
+      }
+
+      .value-num{
+        font-size: 16px;          /* 原本 1.3rem */
+      }
+
+      .kv-unit{
+        font-size: 14px;
+      }
+    }
+  </style>
+
+  <script src="{{ url_for('static', filename='iottalk/jquery-1.8.3.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='iottalk/csmapi.js') }}"></script>
+  <script src="{{ url_for('static', filename='iottalk/demo_frame.js') }}"></script>
+</head>
+<body>
+
+  <!-- 手機版漢堡選單 -->
+  <div class="offcanvas offcanvas-start text-bg-dark" tabindex="-1" id="mobileNav">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title">功能選單</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="d-flex flex-column gap-3">
+        <a class="nav-btn text-center" href="/pond_cycle">趨勢分析</a>
+        <a class="nav-btn text-center" href="/realtime_status">即時狀態</a>
+        <a class="nav-btn text-center" href="javascript:void(0)" onclick="gotoHistory('all')">異常查看</a>
+        <a class="nav-btn text-center" href="/ar_remote" >遠端協作</a>
+        <a class="nav-btn text-center" href="/system_settings">門檻設定</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header 導覽列 -->
+  <div class="header-bar">
+    <button class="btn d-lg-none hamburger-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNav">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+        <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+      </svg>
+    </button>
+
+    <div class="d-none d-lg-flex gap-2">
+      <a class="nav-btn" href="/pond_cycle">趨勢分析</a>
+      <!--<a class="nav-btn" href="/abnormal_summary">異常次數</a>-->
+      <a class="nav-btn" href="/realtime_status">即時狀態</a>
+      <a class="nav-btn" href="/ar_remote" > 遠端協作</a>
+    </div>
+
+    <div class="dashboard-title">即時狀態</div>
+
+    <div class="d-none d-lg-flex gap-2">
+      <a class="nav-btn"
+        href="javascript:void(0)"
+        onclick="gotoHistory('all')">
+        異常查看
+      </a>
+      <a class="nav-btn" href="/system_settings">系統設定</a>
+    </div>
+
+    <div class="d-lg-none" style="width:40px; visibility:hidden;"></div>
+  </div>
+
+  <!-- 主內容 -->
+  <div class="main">
+    <div class="left">
+      <div class="pond-tabs">
+        <div class="tab active" data-pond="F1">魚池 1</div>
+        <div class="tab" data-pond="F2">魚池 2</div>
+        <div class="tab" data-pond="F3">魚池 3</div>
+      </div>
+      <div class="video-card">
+        <div class="video-shell">
+          <img id="liveVideoFeed" src="{{ url_for('video_feed', pond_id='F1') }}" alt="即時影像載入中...">
+        </div>
+      </div>
+    </div>
+
+    <div class="right">
+      <!-- 水質數據卡 -->
+      <div class="card">
+        <div class="card-body">
+          <div class="kv-wrap" id="waterStatusPanel"
+            onclick="gotoHistory('data')"
+            style="cursor: pointer;">
+            <div class="kv-row">
+              <div class="kv-label">溫度</div>
+              <div class="kv-value">
+                <span id="temp-value"
+                      class="value-num"
+                      data-field="temperature">
+                  {{ latest_data.temperature if latest_data else '-' }}
+                </span>
+                <span class="kv-unit">°C</span>
+              </div>
+            </div>
+            <div class="kv-row">
+              <div class="kv-label">酸鹼值</div>
+              <div class="kv-value">
+                <span id="ph-value"
+                      class="value-num"
+                      data-field="ph">
+                  {{ latest_data.ph if latest_data else '-' }}
+                </span>
+              </div>
+            </div>
+            <div class="kv-row">
+              <div class="kv-label">溶氧</div>
+              <div class="kv-value">
+                <span id="do-value"
+                      class="value-num"
+                      data-field="do_level">
+                  {{ latest_data.do_level if latest_data else '-' }}
+                </span>
+                <span class="kv-unit">mg/L</span>
+              </div>
+            </div>
+            <div class="kv-row">
+              <div class="kv-label">鹽度</div>
+              <div class="kv-value">
+                <span id="salinity-value"
+                      class="value-num"
+                      data-field="salinity">
+                  {{ latest_data.salinity if latest_data else '-' }}
+                </span>
+                <span class="kv-unit">PSU</span>
+              </div>
+            </div>
+            <div class="kv-row">
+              <div class="kv-label">氧化還原電位</div>
+              <div class="kv-value">
+                <span id="orp-value"
+                      class="value-num"
+                      data-field="orp">
+                  {{ latest_data.orp if latest_data else '-' }}
+                </span>
+                <span class="kv-unit">mV</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 行為狀態 -->
+      <div class="card status-card clickable" id="behaviorCard">
+        <div class="status-pane">
+          <div class="status-title">行為狀態</div>
+          <div id="behaviorStatus" class="status-value">正常</div>
+        </div>
+      </div>
+
+      <!-- 飼料異常 -->
+      <div class="card status-card clickable" id="feedCard">
+        <div class="status-pane">
+          <div class="status-title">殘料狀態</div>
+          <div id="feedStatus" class="status-value">正常</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  // ===== 門檻值（後端提供） =====
+  const THRESHOLDS = {{ thresholds | tojson }};
+
+  // ===== 異常判斷 =====
+  function isAbnormal(field, value){
+    if (value === null || value === undefined || value === '-') return false;
+    const v = parseFloat(value);
+    if (Number.isNaN(v)) return false;
+
+    switch(field){
+      case 'temperature':
+        return (v < THRESHOLDS.temp_min || v > THRESHOLDS.temp_max);
+      case 'salinity':
+        return (v < THRESHOLDS.salinity_min || v > THRESHOLDS.salinity_max);
+      case 'ph':
+        return (v < THRESHOLDS.ph_min || v > THRESHOLDS.ph_max);
+      case 'do_level':
+        return (v < THRESHOLDS.do_min);
+      case 'orp':
+        return (v < THRESHOLDS.orp_min || v > THRESHOLDS.orp_max);
+      default:
+        return false;
+    }
+  }
+
+  // ===== 更新單一欄位 DOM + 顏色 =====
+  function updateValueDom(field, value){
+    const span = document.querySelector(`.value-num[data-field="${field}"]`);
+    if (!span) return;
+    span.textContent = value;
+
+    if (isAbnormal(field, value)){
+      span.classList.add('bad');
+    }else{
+      span.classList.remove('bad');
+    }
+  }
+
+  // ===== 共用設定 =====
+  const POND_IDS = ['F1','F2','F3'];              // RTSP 用
+  const DB_PONDS  = ['Pond A','Pond B','Pond C']; // MySQL 用
+
+  let currentPond  = 'F1';
+  let currentIndex = 0;
+
+  const tabs = document.querySelectorAll('.tab');
+  const videoFeedElement = document.getElementById('liveVideoFeed');
+
+  function getCurrentDbPond(){
+    return DB_PONDS[currentIndex] || 'Pond A';
+  }
+
+  // ========= 影像 + tab 切換 =========
+  tabs.forEach((tab, idx) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      currentPond  = POND_IDS[idx];
+      currentIndex = idx;
+      console.log('切換魚池：', currentPond, ' index=', currentIndex);
+
+      videoFeedElement.src = `/video_feed/${currentPond}`;
+
+      // 優先用 IoT，如果沒有就抓後端一次
+      if (!updateUiFromLatestGroups()) {
+        fetchBackendLatest();
+      }
+
+      // 切池子時也順便更新一次行為狀態
+      refreshBehaviorStatus();
+      refreshFeedStatus();
+    });
+  });
+
+  // ========= IoTtalk 數值處理 =========
+  let latestGroups = null;   // [[Temp, pH, DO, sal, ORP], ...]
+
+  function fmt(v, digits){
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    return n.toFixed(digits);
+  }
+
+  function normVec5(vec){
+    const arr = Array.isArray(vec) ? vec : [vec];
+    const out = [];
+    for (let i = 0; i < 5; i++){
+      const n = Number(arr[i]);
+      out.push(Number.isFinite(n) ? n : NaN);
+    }
+    return out;
+  }
+
+  function normalizeGroups(raw){
+    let payload = raw;
+
+    // IoTtalk 常見包法：[[x1,x2,x3], null, null, ...]
+    if (Array.isArray(payload) &&
+        payload.length > 0 &&
+        Array.isArray(payload[0]) &&
+        payload.slice(1).every(x => x == null)){
+      payload = payload[0];
+    }
+
+    // 單組 5 值
+    if (Array.isArray(payload) &&
+        payload.length >= 5 &&
+        !Array.isArray(payload[0])){
+      return [ normVec5(payload) ];
+    }
+
+    // 多組，每組 5 值
+    if (Array.isArray(payload) && Array.isArray(payload[0])){
+      return payload.filter(Array.isArray).map(normVec5);
+    }
+
+    // 其他情況 → 當作單組
+    return [ normVec5(payload) ];
+  }
+
+  // 依照 currentIndex 把 latestGroups 顯示到右邊
+  function updateUiFromLatestGroups(){
+    if (!latestGroups || !latestGroups.length) {
+      return false;
+    }
+
+    let idx = currentIndex;
+    if (idx >= latestGroups.length) idx = latestGroups.length - 1;
+    if (idx < 0) idx = 0;
+
+    const g = latestGroups[idx];  // g = [Temp, pH, DO, sal, ORP]
+    console.log('iotTalk 更新數值：index=', idx, ' data=', g);
+
+    updateValueDom('temperature', fmt(g[0], 2));
+    updateValueDom('ph',          fmt(g[1], 2));
+    updateValueDom('do_level',    fmt(g[2], 2));
+    updateValueDom('salinity',    fmt(g[3], 2));
+    updateValueDom('orp',         fmt(g[4], 0));
+
+    return true;
+  }
+
+  // ========= 後端 API 當備援（MySQL） =========
+  function fetchBackendLatest(){
+    const dbPond = getCurrentDbPond();
+    console.log('從後端抓最新狀態：', dbPond);
+
+    fetch(`/api/latest_status?pond_id=${encodeURIComponent(dbPond)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data || data.error) return;
+
+        updateValueDom('temperature', fmt(data.temperature, 2));
+        updateValueDom('ph',          fmt(data.ph, 2));
+        updateValueDom('do_level',    fmt(data.do_level, 2));
+        updateValueDom('salinity',    fmt(data.salinity, 2));
+        updateValueDom('orp',         fmt(data.orp, 0));
+      })
+      .catch(err => console.error('fetchBackendLatest error:', err));
+  }
+
+// ========= 行為異常狀態輪詢（有新異常才閃一次） =========
+const BEHAVIOR_HOLD_MS = 5 * 1000;   // 顯示「異常」一小時
+let behaviorTimer = null;
+let behaviorIsShowingAbnormal = false;      // 目前有沒有在顯示異常
+let lastBehaviorBackendStatus = 'normal';   // 後端上一次回報的狀態
+let lastBehaviorEventTimeStr = "";
+let lastBehaviorAbnormalTs = 0;
+
+// 只負責讓 UI 變紅一段時間
+function flashBehaviorAbnormalOnce() {
+  const el = document.getElementById('behaviorStatus');
+  if (!el) return;
+
+  // 已經在異常中，就不要再觸發一次
+  if (behaviorIsShowingAbnormal) return;
+
+  behaviorIsShowingAbnormal = true;
+  el.textContent = '異常';
+  el.classList.add('abnormal');
+
+  behaviorTimer = setTimeout(() => {
+    behaviorIsShowingAbnormal = false;
+    behaviorTimer = null;
+    el.textContent = '正常';
+    el.classList.remove('abnormal');
+  }, BEHAVIOR_HOLD_MS);
+}
+
+// 每 5 秒問一次後端，只在 normal -> abnormal 那一瞬間觸發一次
+function refreshBehaviorStatus(){
+  const dbPond = getCurrentDbPond();
+
+  fetch(`/api/behavior_status?pond_id=${encodeURIComponent(dbPond)}`)
+    .then(r => r.json())
+    .then(d => {
+      const el = document.getElementById('behaviorStatus');
+      if (!el) return;
+
+      const isAbn = (d.status === 'abnormal');
+      el.textContent = isAbn ? '異常' : '正常';
+      el.classList.toggle('abnormal', isAbn);
+
+      if (d.last_event_time) lastBehaviorEventTimeStr = d.last_event_time;
+    })
+    .catch(err => console.warn('behavior_status error', err));
+}
+// ========= 殘料異常狀態輪詢（normal -> abnormal 才閃一次） =========
+const FEED_HOLD_MS = 5 * 1000; // 想維持更久就改這裡，例如 60*1000
+
+let feedTimer = null;
+let feedIsShowingAbnormal = false;
+let lastFeedBackendStatus = 'normal';
+let lastFeedEventTimeStr = "";
+
+function flashFeedAbnormalOnce(){
+  const el = document.getElementById('feedStatus');
+  if (!el) return;
+  if (feedIsShowingAbnormal) return;
+
+  feedIsShowingAbnormal = true;
+  el.textContent = '異常';
+  el.classList.add('abnormal');
+
+  feedTimer = setTimeout(() => {
+    feedIsShowingAbnormal = false;
+    feedTimer = null;
+    el.textContent = '正常';
+    el.classList.remove('abnormal');
+  }, FEED_HOLD_MS);
+}
+
+function refreshFeedStatus(){
+  const dbPond = getCurrentDbPond();
+
+  fetch(`/api/leftover_status?pond_id=${encodeURIComponent(dbPond)}`)
+    .then(r => r.json())
+    .then(d => {
+      const el = document.getElementById('feedStatus');
+      if (!el) return;
+
+      const isAbn = (d.status === 'abnormal');
+      el.textContent = isAbn ? '異常' : '正常';
+      el.classList.toggle('abnormal', isAbn);
+
+      if (d.last_event_time) lastFeedEventTimeStr = d.last_event_time;
+    })
+    .catch(err => console.warn('leftover_status error', err));
+}
+// ========= 共用：跳到「數據查看」頁面 =========
+function gotoHistory(abType){
+    const dbPond = getCurrentDbPond();  // Pond A / Pond B / Pond C
+
+    // 將時間抓成最近 24 小時
+    const now = new Date();
+    const endDate   = now;
+    const startDate = new Date(now.getTime() - 24*60*60*1000);
+
+    function toMysqlStr(d){
+      const yyyy = d.getFullYear();
+      const mm   = String(d.getMonth()+1).padStart(2,'0');
+      const dd   = String(d.getDate()).padStart(2,'0');
+      const HH   = String(d.getHours()).padStart(2,'0');
+      const MM   = String(d.getMinutes()).padStart(2,'0');
+      const SS   = String(d.getSeconds()).padStart(2,'0');
+      return `${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS}`;
+    }
+
+    const start = toMysqlStr(startDate);
+    const end   = toMysqlStr(endDate);
+
+    // ⭐ highlight_ts：如果有異常，我們使用 lastBehaviorAbnormalTs
+  let highlightTs = "";
+    if (abType === 'behavior' && lastBehaviorEventTimeStr) {
+      highlightTs = lastBehaviorEventTimeStr;   // ex: "2025-12-02 22:10:00"
+    }
+
+    // ⭐ 正確組 URL
+    let url = `/history_result`
+      + `?pond_id=${encodeURIComponent(dbPond)}`
+      + `&start=${encodeURIComponent(start)}`
+      + `&end=${encodeURIComponent(end)}`
+      + `&abnormal_type=${encodeURIComponent(abType)}`;
+
+    if (highlightTs){
+        url += `&highlight_ts=${encodeURIComponent(highlightTs)}`;
+    }
+
+    console.log("跳轉到：", url);
+    window.location.href = url;   // ⭐ 正確跳轉
+}
+
+  // ========= 啟動 IoTtalk & 初始化 =========
+  $(function () {
+    console.log('Realtime init');
+
+    // ✅ 先用後端資料填一次（不依賴 iottalk）
+    fetchBackendLatest();
+
+    // ✅ 先啟動狀態輪詢（不管 iottalk 成不成功都會更新狀態）
+    refreshBehaviorStatus();
+    setInterval(refreshBehaviorStatus, 5000);
+
+    refreshFeedStatus();
+    setInterval(refreshFeedStatus, 5000);
+
+    // ✅ 先綁點擊事件（不依賴 iottalk）
+    const behaviorCard = document.getElementById('behaviorCard');
+    const feedCard     = document.getElementById('feedCard');
+    const waterPanel   = document.getElementById('waterStatusPanel');
+
+    if (behaviorCard) behaviorCard.addEventListener('click', () => gotoHistory('behavior'));
+    if (feedCard)     feedCard.addEventListener('click', () => gotoHistory('leftover'));
+    if (waterPanel)   waterPanel.addEventListener('click', () => gotoHistory('data'));
+
+    // ✅ 最後再啟動 iottalk；失敗也不影響上面輪詢
+    try {
+      const daiSDK = dai();  // demo_frame.js 的 routinePull
+
+      $(window).on('iotTalkUpdate', function (e) {
+        const samples = e.dataArr;
+        if (!samples || !samples.length) return;
+
+        const last    = samples[samples.length - 1];
+        const lastVal = Array.isArray(last) ? last[1] : last;
+
+        latestGroups = normalizeGroups(lastVal);
+        updateUiFromLatestGroups();
+      });
+    } catch (err) {
+      console.warn('IoTtalk init failed, but polling still works:', err);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>IoTtalk web test</title>
+  <script type="text/javascript" src="lib/jquery-1.8.3.min.js"></script>
+  <script src="lib/csmapi.js"></script>
+  <script src="lib/demo_frame.js"></script>
+  <style>
+    body { font-family: system-ui, "Microsoft JhengHei", Arial; margin: 24px; background:#0f172a; color:#e2e8f0; }
+    .card { background:#111827; border:1px solid #374151; border-radius:14px; padding:16px 18px; max-width: 520px; }
+    .name { color:#a5b4fc; font-weight:700; }
+    .value { font-size: 40px; margin-top: 8px; }
+    .ts { color:#94a3b8; font-size: 12px; margin-top: 6px; }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <div class="name" id="dfName">--</div>
+    <div class="value" id="val">--</div>
+    <div class="ts" id="ts">--</div>
+  </div>
+
+  <script>
+    $(function () {
+      // 啟動你原本的 demo_frame.js（會註冊並開始輪詢 ODF）
+      const daiSDK = dai();
+
+      // 監聽 demo_frame.js 丟出的事件：每次有新資料就更新畫面
+      $(window).on('iotTalkUpdate', function (e) {
+        const samples = e.dataArr;              // 格式: [[timestamp, value], ...]
+        if (!samples || !samples.length) return;
+
+        const last = samples[samples.length - 1];
+        const ts   = new Date(last[0]).toLocaleString();
+        let val    = last[1];                   // 可能是數字 / 字串 / 陣列
+        if (Array.isArray(val)) val = val.join(', ');
+
+        // 若是數字可選擇格式化
+        const num = Number(val);
+        const shown = Number.isFinite(num) ? num.toString() : String(val);
+
+        $('#dfName').text(e.df_name);          // e.g. "Dummy_Control"
+        $('#val').text(shown);                 // 顯示最新數值
+        $('#ts').text('更新時間：' + ts);       // 顯示時間
+      });
+
+      // 如需強制刷新某 ODF（通常不需要）
+      // setInterval(() => daiSDK.refresh("Dummy_Control"), 1000);
+    });
+  </script>
+</body>
+</html>

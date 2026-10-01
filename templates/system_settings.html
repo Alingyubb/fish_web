@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>門檻設定</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0e1a2b;
+      --panel:#172537;
+      --accent:#00bfff;
+      --text:#ffffff;
+      --muted:#9bd1ff;
+
+      --slider-wrap-h: 44px;   /* 整個拉桿區高度 */
+      --track-h: 8px;          /* 灰線/藍線高度 */
+      --thumb-size: 25px;      /* 點大小 */
+      --hit-h: 44px;           /* 可點擊/拖曳觸發區高度（越大越好拖） */
+    }
+
+    * { box-sizing: border-box; }
+    body{
+      min-height:100vh;
+      margin:0;
+      background: radial-gradient(1200px 700px at 50% -10%, rgba(0,191,255,.10), transparent 60%),
+                  linear-gradient(180deg, #0b1e2f, #07131f);
+      color: var(--text);
+      font-family:"Segoe UI","Noto Sans TC",system-ui,-apple-system,Arial,sans-serif;
+    }
+
+    /* ===== Header ===== */
+    .header-bar{
+      display:flex; align-items:center; justify-content:space-between;
+      background:var(--panel);
+      border-bottom:2px solid var(--accent);
+      padding:10px 20px;
+      position:sticky; top:0; z-index:10;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .dashboard-title{
+      font-size:1.6rem;
+      padding:14px 0;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-shadow: 0 0 18px rgba(0,191,255,.25);
+      white-space: nowrap;
+    }
+    .nav-btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      background:#007BFF;
+      color:#fff !important;
+      padding:8px 12px;
+      border-radius:10px;
+      text-decoration:none;
+      font-weight:700;
+      box-shadow:0 2px 6px rgba(0,0,0,.3);
+      border: 1px solid rgba(255,255,255,.06);
+      height:44px;
+    }
+    .nav-btn:hover{ background:#0056b3; }
+    .nav-btn.nav-danger{ background:#ff5b5b; }
+    .nav-btn.nav-danger:hover{ background:#e24848; }
+
+    .hamburger-btn{
+      padding: 6px;
+      color: var(--muted);
+      border: 1px solid transparent;
+    }
+    .hamburger-btn:hover{
+      color: var(--text);
+      background-color: rgba(255,255,255,0.1);
+    }
+
+    /* ===== 內容區 ===== */
+    .wrap{
+      width: clamp(1000px, 92vw, 1200px);
+      margin: 16px auto;
+      padding: 0 12px;
+    }
+    .card-neo{
+      background: rgba(16, 36, 52, .78);
+      border: 1px solid rgba(0,191,255,.22);
+      border-radius: 14px;
+      box-shadow:0 10px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(0,191,255,.06) inset;
+      overflow:hidden;
+    }
+    .card-header{
+      padding: 14px 16px;
+      font-weight: 800;
+      border-bottom: 1px solid rgba(0,191,255,.18);
+      background: rgba(0,191,255,.06);
+    }
+    .card-body{ padding: 16px; }
+
+    .th-item{
+      padding: 14px 0;
+      border-bottom: 1px dashed rgba(155, 209, 255, .22);
+    }
+    .th-item:last-child{ border-bottom: none; }
+
+    label{
+      display:block;
+      margin-bottom: 10px;
+      font-size: 18px;
+      font-weight: 800;
+      color: #d8f3ff;
+    }
+
+    .row-flex{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+    }
+
+    .num-control{
+      width: 130px;
+      height: 44px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,191,255,.35);
+      background: rgba(10, 25, 38, .85);
+      color: #e9f6ff;
+      padding: 0 12px;
+      font-weight: 700;
+      outline: none;
+      box-shadow: inset 0 0 0 1px rgba(0,191,255,.06);
+    }
+    .num-control:focus{
+      border-color: rgba(0,191,255,.7);
+      box-shadow: 0 0 0 3px rgba(0,191,255,.15);
+    }
+
+    .hint{
+      color: var(--muted);
+      font-size: .9rem;
+      opacity: .95;
+      margin-top: .25rem;
+    }
+
+    /* =========================================================
+       ✅ 拉桿（整理成「單一版本」：避免你現在的重複規則互相覆蓋）
+       - 灰線/藍線：固定一條
+       - range：高度用 --hit-h（觸發區變大），但 track 高度仍是 --track-h
+       - 雙拉桿用兩個 range 疊在一起（z-index 控制）
+       ========================================================= */
+    .slider-wrap{
+      position: relative;
+      height: var(--slider-wrap-h);
+      flex: 1;
+      pointer-events: auto;
+    }
+
+    .slider-track{
+      position:absolute;
+      left:0; right:0;
+      top:50%;
+      transform: translateY(-50%);
+      height: var(--track-h);
+      background: rgba(255,255,255,.18);
+      border-radius: 999px;
+      z-index: 1;
+      pointer-events:none;
+    }
+    .slider-progress{
+      position:absolute;
+      left:0;
+      top:50%;
+      transform: translateY(-50%);
+      height: var(--track-h);
+      background: var(--accent);
+      border-radius: 999px;
+      width: 0%;
+      z-index: 2;
+      pointer-events:none;
+    }
+
+    /* 雙拉桿容器（只定位，不吃事件） */
+    .slider-inner-wrap{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+    }
+
+    .slider-inner-wrap input[type="range"]{
+      pointer-events: none;
+    }
+
+    .slider-wrap > input[type="range"]{
+      pointer-events: auto;
+    }
+    
+    /* ✅ 所有 range（包含單拉桿與雙拉桿）都用同一個垂直置中規則 */
+    .slider-wrap input[type="range"]{
+      position:absolute;
+      left:0; right:0;
+      top:50%;
+      transform: translateY(-50%);
+      width:100%;
+      height: var(--hit-h);           /* 觸發區變大 */
+      margin:0;
+      padding:0;
+      background: transparent;
+      -webkit-appearance:none;
+      appearance:none;
+      outline:none;
+      /*z-index: 5;*/
+    }
+
+    /* track 透明（避免兩條灰線） */
+    .slider-wrap input[type="range"]::-webkit-slider-runnable-track{
+      height: var(--track-h);
+      background: transparent;
+      border-radius: 999px;
+    }
+    .slider-wrap input[type="range"]::-moz-range-track{
+      height: var(--track-h);
+      background: transparent;
+      border-radius: 999px;
+    }
+
+    /* thumb（點） */
+    .slider-wrap input[type="range"]::-webkit-slider-thumb{
+      -webkit-appearance:none;
+      appearance:none;
+      width: var(--thumb-size);
+      height: var(--thumb-size);
+      border-radius: 999px;
+      background: var(--accent);
+      border: 2px solid rgba(12, 34, 52, .95);
+      box-shadow: 0 0 0 4px rgba(0,191,255,.18);
+      cursor: pointer;
+      margin-top: calc((var(--track-h) - var(--thumb-size)) / 2);
+    }
+    .slider-wrap input[type="range"]::-moz-range-thumb{
+      width: var(--thumb-size);
+      height: var(--thumb-size);
+      border-radius: 999px;
+      background: var(--accent);
+      border: 2px solid rgba(12, 34, 52, .95);
+      box-shadow: 0 0 0 4px rgba(0,191,255,.18);
+      cursor: pointer;
+    }
+
+    /* ===== 雙拉桿互搶：用 z-index 決定誰在上層 ===== */
+    .slider-inner-wrap .rng-min{ z-index: 5; }
+    .slider-inner-wrap .rng-max{ z-index: 6; }
+    .slider-inner-wrap .rng-min.is-top{ z-index: 7; }
+    .slider-inner-wrap .rng-max.is-top{ z-index: 7; }
+
+    /* ===== footer buttons ===== */
+    .sticky-footer{
+      position: sticky;
+      bottom: 0;
+      z-index: 4;
+      display:flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px 16px;
+      margin-top: 14px;
+      background: rgba(10, 25, 38, .92);
+      border-top: 1px solid rgba(0,191,255,.18);
+    }
+    .btnx{
+      height: 44px;
+      padding: 0 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      font-weight: 800;
+      cursor:pointer;
+      transition: transform .06s ease, filter .2s ease;
+      color: #e9f6ff;
+      background: transparent;
+    }
+    .btnx:active{ transform: translateY(1px); }
+
+    .btnx-primary{
+      background: var(--accent);
+      color: #07202d;
+      border-color: rgba(0,191,255,.35);
+      box-shadow: 0 10px 24px rgba(0,191,255,.18);
+    }
+    .btnx-primary:hover{ filter: brightness(1.05); }
+
+    .btnx-outline{
+      border-color: rgba(0,191,255,.35);
+    }
+    .btnx-outline:hover{ background: rgba(0,191,255,.08); }
+
+    @media (max-width: 992px) {
+      .wrap { width: 96vw; margin: 16px auto; }
+      .header-bar { padding: 10px 15px; }
+    }
+    @media (max-width: 768px) {
+      .header-bar { align-items: stretch; gap: 10px; padding: 10px; }
+      .num-control{
+        width: 60px;        /* 原本 130px → 縮窄 */
+        padding: 0 8px;     /* 左右內距一起縮 */
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- 手機：offcanvas 導覽 -->
+  <div class="offcanvas offcanvas-start text-bg-dark" tabindex="-1" id="mobileNav" aria-labelledby="mobileNavLabel">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="mobileNavLabel">功能選單</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="d-flex flex-column gap-3">
+        <a class="nav-btn text-center" href="/pond_cycle">趨勢分析</a>
+        <a class="nav-btn text-center" href="/realtime_status">即時狀態</a>
+        <a class="nav-btn text-center" href="/history_result">異常查看</a>
+        <a class="nav-btn text-center" href="/ar_remote">遠端協作</a>
+        <a class="nav-btn text-center" href="/system_settings">門檻設定</a>
+        <a class="nav-btn text-center nav-danger" href="/logout">登出</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="header-bar">
+    <button class="btn d-lg-none hamburger-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNav">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+        <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+      </svg>
+    </button>
+
+    <div class="d-none d-lg-flex gap-2">
+      <a class="nav-btn" href="/pond_cycle">歷史趨勢</a>
+      <a class="nav-btn" href="/realtime_status">即時狀態</a>
+      <a class="nav-btn" href="/ar_remote">遠端協作</a>
+    </div>
+
+    <div class="dashboard-title">門檻設定</div>
+
+    <div class="d-none d-lg-flex gap-2">
+      <!--<a class="nav-btn" href="/data_prediction">數據預測</a>-->
+      <a class="nav-btn" href="/history_result">異常查看</a>
+      <a class="nav-btn nav-danger" href="/logout">登出</a>
+    </div>
+
+    <div class="d-lg-none" style="width: 40px; visibility: hidden;"></div>
+  </div>
+
+  <div class="wrap">
+    <form id="thresholdForm" action="/save_settings" method="post">
+      <div class="card-neo">
+        <!--<div class="card-header">異常值範圍設定</div>-->
+        <div class="card-body">
+
+          <!-- 水溫 -->
+          <div class="th-item" id="th-temp"
+               data-min-limit="0" data-max-limit="45"
+               data-step="0.1"
+               data-shift="10">
+            <label>水溫（°C）</label>
+            <div class="row-flex">
+              <input class="num-control" name="temp_min" type="number" step="0.1"
+                     data-role="min"
+                     value="{{ thresholds.temp_min if thresholds else 20 }}">
+
+              <div class="slider-wrap">
+                <div class="slider-track"></div>
+                <div class="slider-progress"></div>
+
+                <div class="slider-inner-wrap">
+                  <input type="range" class="rng-min" min="0" max="45" step="0.1"
+                         value="{{ thresholds.temp_min if thresholds else 20 }}">
+                  <input type="range" class="rng-max" min="0" max="45" step="0.1"
+                         value="{{ thresholds.temp_max if thresholds else 28 }}">
+                </div>
+              </div>
+
+              <input class="num-control" name="temp_max" type="number" step="0.1"
+                     data-role="max"
+                     value="{{ thresholds.temp_max if thresholds else 28 }}">
+            </div>
+            <div class="hint">系統範圍 0~45</div>
+          </div>
+
+          <!-- 氧化還原電位（ORP)（原本鹽度雙拉桿改名 + 改範圍/初始） -->
+          <div class="th-item" id="th-ec"
+               data-min-limit="100" data-max-limit="400"
+               data-step="1"
+               data-shift="10">
+            <label>氧化還原電位（ORP）</label>
+            <div class="row-flex">
+              <input class="num-control" name="orp_min" type="number" step="1"
+                     data-role="min"
+                     value="{{ thresholds.orp_min if thresholds else 150 }}">
+
+              <div class="slider-wrap">
+                <div class="slider-track"></div>
+                <div class="slider-progress"></div>
+
+                <div class="slider-inner-wrap">
+                  <input type="range" class="rng-min" min="100" max="400" step="1"
+                         value="{{ thresholds.orp_min if thresholds else 150 }}">
+                  <input type="range" class="rng-max" min="100" max="400" step="1"
+                         value="{{ thresholds.orp_max if thresholds else 250 }}">
+                </div>
+              </div>
+
+              <input class="num-control" name="orp_max" type="number" step="1"
+                     data-role="max"
+                     value="{{ thresholds.orp_max if thresholds else 250 }}">
+            </div>
+            <div class="hint">系統範圍 100~400</div>
+          </div>
+
+          <!-- pH -->
+          <div class="th-item" id="th-ph"
+               data-min-limit="0" data-max-limit="14"
+               data-step="0.1"
+               data-shift="10">
+            <label>pH</label>
+            <div class="row-flex">
+              <input class="num-control" name="ph_min" type="number" step="0.1"
+                     data-role="min"
+                     value="{{ thresholds.ph_min if thresholds else 6 }}">
+
+              <div class="slider-wrap">
+                <div class="slider-track"></div>
+                <div class="slider-progress"></div>
+
+                <div class="slider-inner-wrap">
+                  <input type="range" class="rng-min" min="0" max="14" step="0.1"
+                         value="{{ thresholds.ph_min if thresholds else 6 }}">
+                  <input type="range" class="rng-max" min="0" max="14" step="0.1"
+                         value="{{ thresholds.ph_max if thresholds else 9 }}">
+                </div>
+              </div>
+
+              <input class="num-control" name="ph_max" type="number" step="0.1"
+                     data-role="max"
+                     value="{{ thresholds.ph_max if thresholds else 9 }}">
+            </div>
+            <div class="hint">系統範圍 0~14</div>
+          </div>
+
+          <!-- 溶氧下限（單拉桿） -->
+          <div class="th-item" id="th-do"
+               data-min-limit="0" data-max-limit="20"
+               data-step="0.1"
+               data-shift="10"
+               data-single="true">
+            <label>溶氧下限（mg/L）</label>
+            <div class="row-flex">
+              <input class="num-control" name="do_min" type="number" step="0.1"
+                     data-role="min"
+                     value="{{ thresholds.do_min if thresholds else 5 }}">
+
+              <div class="slider-wrap">
+                <div class="slider-track"></div>
+                <div class="slider-progress"></div>
+
+                <input type="range" class="rng-min" min="0" max="20" step="0.1"
+                       value="{{ thresholds.do_min if thresholds else 5 }}">
+              </div>
+
+              <span style="width:40px; text-align:right; color:#9bd1ff;">20</span>
+            </div>
+            <div class="hint">系統範圍 0~20</div>
+          </div>
+
+          <!-- ✅ 新增：鹽度（單向拉桿，放在溶氧下方） -->
+          <div class="th-item" id="th-sal-single"
+               data-min-limit="0" data-max-limit="20"
+               data-step="0.1"
+               data-shift="10"
+               data-single="true">
+            <label>鹽度（PSU）</label>
+            <input type="hidden" name="salinity_min" value="0">
+            <div class="row-flex">
+              <input class="num-control" name="salinity_max" type="number" step="0.1"
+                     data-role="min"
+                     value="{{ thresholds.salinity_max if thresholds else 10 }}">
+
+              <div class="slider-wrap">
+                <div class="slider-track"></div>
+                <div class="slider-progress"></div>
+
+                <input type="range" class="rng-min" min="0" max="20" step="0.1"
+                       value="{{ thresholds.salinity_max if thresholds else 10 }}">
+              </div>
+
+              <span style="width:40px; text-align:right; color:#9bd1ff;">20</span>
+            </div>
+            <div class="hint">系統範圍 0~20</div>
+          </div>
+
+          <div class="sticky-footer">
+            <button id="saveBtn" type="submit" class="btnx btnx-primary">儲存設定</button>
+            <button type="reset" class="btnx btnx-outline">還原未儲存狀態</button>
+          </div>
+
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+  (function(){
+    function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+    function pct(v, min, max){ return ((v - min) / (max - min)) * 100; }
+
+    function updateProgress(thItem){
+      const minLimit = parseFloat(thItem.dataset.minLimit);
+      const maxLimit = parseFloat(thItem.dataset.maxLimit);
+      const isSingle = thItem.dataset.single === "true";
+
+      const rngMin = thItem.querySelector(".rng-min");
+      const rngMax = thItem.querySelector(".rng-max");
+      const bar = thItem.querySelector(".slider-progress");
+
+      const vMin = parseFloat(rngMin.value);
+      const vMax = isSingle ? vMin : parseFloat(rngMax.value);
+
+      if(isSingle){
+        bar.style.left = "0%";
+        bar.style.width = pct(vMin, minLimit, maxLimit) + "%";
+      }else{
+        const left = pct(Math.min(vMin, vMax), minLimit, maxLimit);
+        const right = pct(Math.max(vMin, vMax), minLimit, maxLimit);
+        bar.style.left = left + "%";
+        bar.style.width = (right - left) + "%";
+      }
+    }
+
+    function syncFromRange(thItem, which){
+      const step = parseFloat(thItem.dataset.step || "0.1");
+      const minLimit = parseFloat(thItem.dataset.minLimit);
+      const maxLimit = parseFloat(thItem.dataset.maxLimit);
+      const isSingle = thItem.dataset.single === "true";
+
+      const inMin = thItem.querySelector('input[data-role="min"]');
+      const inMax = thItem.querySelector('input[data-role="max"]');
+      const rngMin = thItem.querySelector(".rng-min");
+      const rngMax = thItem.querySelector(".rng-max");
+
+      let vMin = clamp(parseFloat(rngMin.value), minLimit, maxLimit);
+      let vMax = isSingle ? vMin : clamp(parseFloat(rngMax.value), minLimit, maxLimit);
+
+      if(!isSingle){
+        if(vMin > vMax){
+          if(which === "min") vMin = vMax;
+          else vMax = vMin;
+        }
+        rngMin.value = vMin;
+        rngMax.value = vMax;
+        inMin.value = (step >= 1) ? vMin.toFixed(0) : vMin.toFixed(1);
+        inMax.value = (step >= 1) ? vMax.toFixed(0) : vMax.toFixed(1);
+      }else{
+        rngMin.value = vMin;
+        inMin.value = (step >= 1) ? vMin.toFixed(0) : vMin.toFixed(1);
+      }
+
+      updateProgress(thItem);
+    }
+
+    function syncFromInput(thItem, which){
+      const step = parseFloat(thItem.dataset.step || "0.1");
+      const minLimit = parseFloat(thItem.dataset.minLimit);
+      const maxLimit = parseFloat(thItem.dataset.maxLimit);
+      const isSingle = thItem.dataset.single === "true";
+
+      const inMin = thItem.querySelector('input[data-role="min"]');
+      const inMax = thItem.querySelector('input[data-role="max"]');
+      const rngMin = thItem.querySelector(".rng-min");
+      const rngMax = thItem.querySelector(".rng-max");
+
+      const nMin = parseFloat(inMin.value);
+      const nMax = isSingle ? nMin : parseFloat(inMax.value);
+
+      if (!Number.isFinite(nMin)) return;
+      if (!isSingle && !Number.isFinite(nMax)) return;
+
+      let vMin = clamp(nMin, minLimit, maxLimit);
+      let vMax = isSingle ? vMin : clamp(nMax, minLimit, maxLimit);
+
+      if(!isSingle){
+        if(vMin > vMax){
+          if(which === "min") vMin = vMax;
+          else vMax = vMin;
+        }
+        rngMin.value = vMin;
+        rngMax.value = vMax;
+        inMin.value = vMin;
+        inMax.value = vMax;
+      }else{
+        rngMin.value = vMin;
+        inMin.value = vMin;
+      }
+
+      updateProgress(thItem);
+    }
+
+    function bindKeyboardStep(inputEl, thItem, which){
+      const step = parseFloat(thItem.dataset.step || "0.1");
+      const shiftMul = parseFloat(thItem.dataset.shift || "10");
+
+      inputEl.addEventListener("keydown", (e)=>{
+        if(e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+
+        e.preventDefault();
+        const delta = (e.key === "ArrowUp" ? step : -step) * (e.shiftKey ? shiftMul : 1);
+        const next = (parseFloat(inputEl.value || "0") + delta);
+        inputEl.value = next;
+        syncFromInput(thItem, which);
+      });
+    }
+
+    function setTopHandle(thItem, prefer){
+      const rngMin = thItem.querySelector(".rng-min");
+      const rngMax = thItem.querySelector(".rng-max");
+      if(!rngMin || !rngMax) return;
+
+      rngMin.classList.remove("is-top");
+      rngMax.classList.remove("is-top");
+      (prefer === "min" ? rngMin : rngMax).classList.add("is-top");
+    }
+
+    function bindSmartHandle(thItem){
+      if(thItem.dataset.single === "true") return;
+
+      const wrap  = thItem.querySelector(".slider-wrap");
+      const rngMin= thItem.querySelector(".rng-min");
+      const rngMax= thItem.querySelector(".rng-max");
+      if(!wrap || !rngMin || !rngMax) return;
+
+      let dragging = false;
+      let active = null;
+
+      const minLimit = parseFloat(thItem.dataset.minLimit);
+      const maxLimit = parseFloat(thItem.dataset.maxLimit);
+      const step     = parseFloat(thItem.dataset.step || "1");
+
+      const snap = (v) => Math.round(v / step) * step;
+
+      const clientXToValue = (clientX) => {
+        const rect = wrap.getBoundingClientRect();
+        const x = clamp(clientX - rect.left, 0, rect.width);
+        const ratio = rect.width ? (x / rect.width) : 0;
+        return minLimit + ratio * (maxLimit - minLimit);
+      };
+
+      const pickNearest = (v) => {
+        const vMin = parseFloat(rngMin.value);
+        const vMax = parseFloat(rngMax.value);
+        return (Math.abs(v - vMin) <= Math.abs(v - vMax)) ? "min" : "max";
+      };
+
+      const applyValue = (which, v) => {
+        v = snap(clamp(v, minLimit, maxLimit));
+
+        let vMin = parseFloat(rngMin.value);
+        let vMax = parseFloat(rngMax.value);
+
+        if(which === "min"){
+          v = Math.min(v, vMax);
+          rngMin.value = v;
+          syncFromRange(thItem, "min"); // ✅ 用你現有函式同步輸入+進度條
+        } else {
+          v = Math.max(v, vMin);
+          rngMax.value = v;
+          syncFromRange(thItem, "max");
+        }
+      };
+
+      wrap.addEventListener("pointerdown", (e) => {
+        dragging = true;
+        wrap.setPointerCapture(e.pointerId);
+
+        const v = clientXToValue(e.clientX);
+        active = pickNearest(v);
+        applyValue(active, v);
+        e.preventDefault();
+      });
+
+      wrap.addEventListener("pointermove", (e) => {
+        if(!dragging) return;
+        const v = clientXToValue(e.clientX);
+        applyValue(active, v);
+        e.preventDefault();
+      });
+
+      const endDrag = (e) => {
+        if(!dragging) return;
+        dragging = false;
+        active = null;
+        try { wrap.releasePointerCapture(e.pointerId); } catch(_) {}
+      };
+
+      wrap.addEventListener("pointerup", endDrag);
+      wrap.addEventListener("pointercancel", endDrag);
+    }
+
+    // ✅ 不管按到哪顆 range，都用滑鼠位置判斷誰更近，誰就置頂
+    /*rngMin.addEventListener("pointerdown", (e)=>setTopHandle(thItem, pickNearestHandle(e.clientX)));
+    rngMax.addEventListener("pointerdown", (e)=>setTopHandle(thItem, pickNearestHandle(e.clientX)));*/
+    
+
+    document.querySelectorAll(".th-item").forEach(thItem=>{
+      const isSingle = thItem.dataset.single === "true";
+
+      const rngMin = thItem.querySelector(".rng-min");
+      const rngMax = thItem.querySelector(".rng-max");
+      const inMin  = thItem.querySelector('input[data-role="min"]');
+      const inMax  = thItem.querySelector('input[data-role="max"]');
+
+      if(rngMin) rngMin.addEventListener("input", ()=>syncFromRange(thItem, "min"));
+      if(!isSingle && rngMax){
+        rngMax.addEventListener("input", ()=>syncFromRange(thItem, "max"));
+      }
+
+      // ✅ 打字期間不 sync，避免還沒輸入完成就被 clamp 回寫
+      let typingTimer = null;
+      const scheduleSync = (thItem, which) => {
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => syncFromInput(thItem, which), 0);
+      };
+
+      if(inMin){
+        // 打字不處理，只記錄使用者正在輸入
+        inMin.addEventListener("input", ()=>{ /* do nothing */ });
+        // 離開欄位才套用（點到其他地方）
+        inMin.addEventListener("blur",  ()=>scheduleSync(thItem, "min"));
+        // 某些瀏覽器用 change 才會觸發（例如用上下箭頭或滑鼠調整）
+        inMin.addEventListener("change",()=>scheduleSync(thItem, "min"));
+        // Enter 立即套用
+        inMin.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); scheduleSync(thItem,"min"); } });
+
+        bindKeyboardStep(inMin, thItem, "min");
+      }
+
+      if(!isSingle && inMax){
+        inMax.addEventListener("input", ()=>{ /* do nothing */ });
+        inMax.addEventListener("blur",  ()=>scheduleSync(thItem, "max"));
+        inMax.addEventListener("change",()=>scheduleSync(thItem, "max"));
+        inMax.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); scheduleSync(thItem,"max"); } });
+
+        bindKeyboardStep(inMax, thItem, "max");
+      }
+
+      bindSmartHandle(thItem);
+      updateProgress(thItem);
+    });
+
+    const form = document.getElementById("thresholdForm");
+    if(form){
+      form.addEventListener("reset", () => {
+        setTimeout(() => {
+          document.querySelectorAll(".th-item").forEach(thItem => {
+            const isSingle = thItem.dataset.single === "true";
+            const rngMin = thItem.querySelector(".rng-min");
+            const rngMax = thItem.querySelector(".rng-max");
+            if(rngMin) syncFromRange(thItem, "min");
+            if(!isSingle && rngMax) syncFromRange(thItem, "max");
+
+            if(!isSingle && rngMin && rngMax){
+              rngMin.classList.remove("is-top");
+              rngMax.classList.add("is-top");
+            }
+          });
+        }, 0);
+      });
+    }
+  })();
+  </script>
+</body>
+</html>

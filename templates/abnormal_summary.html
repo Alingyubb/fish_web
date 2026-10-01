@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>異常次數摘要 - 戰情室</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#0e1a2b; --panel:#172537; --accent:#00bfff; --text:#ffffff; --muted:#9bd1ff;
+      --line: rgba(0,191,255,.22);
+    }
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:"Segoe UI","Microsoft JhengHei",sans-serif;
+    }
+
+    /* 頂部（維持既有風格） */
+    .header-bar{
+      display:flex; align-items:center; justify-content:space-between;
+      background:var(--panel); border-bottom:2px solid var(--accent); padding:10px 20px;
+      position:sticky; top:0; z-index:10;
+    }
+    .navs{ display:flex; gap:10px; align-items:center; }
+    .nav-button a{
+      background:#007BFF; color:#fff; padding:8px 12px; border-radius:10px; text-decoration:none;
+      font-weight:600; box-shadow:0 2px 6px rgba(0,0,0,.3);
+    }
+    .nav-button a:hover{ background:#0056b3; }
+    .title{ font-size:1.4rem; color:var(--muted); margin:0 auto; }
+
+    select{
+      background:#142132; color:#e8f6ff; border:1px solid rgba(0,191,255,.35);
+      border-radius:8px; padding:6px 10px; font-size:16px;
+    }
+
+    /* 主要內容：上下分層（圖表在上，摘要在下） */
+    .wrap{
+      width:clamp(1000px,92vw,2000px);
+      margin:16px auto; padding:0 12px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;   /* 單欄垂直堆疊 */
+      gap:16px;
+    }
+
+    .card{
+      background:var(--panel); border:1px solid var(--line); border-radius:14px;
+      box-shadow:0 8px 22px rgba(0,0,0,.35), 0 0 0 1px rgba(0,191,255,.06) inset;
+    }
+    .card-header{
+      padding:.75rem 1rem; color:var(--muted);
+      border-bottom:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(0,191,255,.08), transparent);
+      border-top-left-radius:14px; border-top-right-radius:14px;
+      font-weight:600;
+    }
+    .card-body{ padding:1rem; }
+
+    /* 圖表容器固定高度，避免用 CSS 拉伸 canvas 造成字體變形 */
+    .chart-container{
+      position:relative;
+      width:100%;
+      height:800px;         /* 可調：380~440 之間都 OK */
+      max-height:55vh;      /* 超大螢幕時不要太高 */
+    }
+    canvas{
+      display:block;
+      width:100% !important;
+      height:auto !important;     /* 關鍵：不要 100%，讓 Chart.js 依容器高度繪製 */
+      background:#0e1a2b; border-radius:10px;
+      transform:none !important;
+    }
+
+    /* 摘要區：卡片左右擺放，窄螢幕自動換行 */
+    .kpis{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(260px, 1fr)); /* 兩欄 */
+      gap:12px;
+    }
+    @media (max-width: 700px){
+      .kpis{ grid-template-columns: 1fr; } /* 手機改單欄 */
+    }
+
+    .kpi{
+      background:#0f1c2c; border:1px solid rgba(0,191,255,.25); border-radius:12px;
+      padding:14px;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .kpi .label{ color:var(--muted); font-size:.95rem; }
+    .kpi .value{
+      font-size:2.2rem; font-weight:800; line-height:1; white-space:nowrap;
+      letter-spacing:0;                       /* 避免視覺擴寬 */
+      font-variant-numeric: tabular-nums;     /* 等寬數字 */
+      font-stretch:100%;                      /* 確保不被拉伸 */
+    }
+    .kpi .hint{ color:#9bd1ff; font-size:.85rem; opacity:.9; margin-top:6px; }
+  </style>
+</head>
+<body>
+  <div class="header-bar">
+    <div class="navs">
+      <div class="nav-button"><a href="/pond_cycle">← 返回主頁</a></div>
+      <select id="pondSelector"></select>
+    </div>
+    <div class="title">異常次數摘要（近 24 小時）</div>
+    <div class="navs">
+      <div class="nav-button"><a href="/realtime_status">即時狀態</a></div>
+      <div class="nav-button"><a href="/system_settings">系統設定</a></div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="grid">
+      <!-- 上：每小時異常長條圖 -->
+      <div class="card">
+        <div class="card-header">每小時異常次數</div>
+        <div class="card-body">
+          <div class="chart-container"><canvas id="abnormalChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- 下：摘要（兩個 KPI） -->
+      <div class="card">
+        <div class="card-header">摘要</div>
+        <div class="card-body">
+          <div class="kpis">
+            <div class="kpi">
+              <div>
+                <div class="label">殘料倒數計時</div>
+                <div class="hint">發放飼料後倒數 1 小時（占位顯示）</div>
+              </div>
+              <div class="value" id="feedCountdown">60:00</div>
+            </div>
+
+            <div class="kpi">
+              <div>
+                <div class="label">翻身次數（近 1 小時）</div>
+                <div class="hint">達到 3 次即判定異常（占位顯示）</div>
+              </div>
+              <div class="value" id="flipCount">0次</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div> <!-- /grid -->
+  </div> <!-- /wrap -->
+
+  <script>
+    // 後端提供：近 24 小時各整點異常次數
+    const summaryData = {{ summary_data | tojson }};
+    const pondSelector = document.getElementById('pondSelector');
+
+    // 填入魚池下拉
+    const pondIds = Object.keys(summaryData);
+    pondIds.forEach(pid=>{
+        const opt = document.createElement('option');
+        opt.value = pid; opt.textContent = pid;
+        pondSelector.appendChild(opt);
+    });
+    let currentPond = pondIds[0] || null;
+    if (currentPond) pondSelector.value = currentPond;
+
+    // 建立圖表
+    const ctx = document.getElementById('abnormalChart').getContext('2d');
+    const abnormalChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+        labels: [],
+        datasets: [{ label:'異常次數', data: [], backgroundColor:'#ff4d4d' }]
+        },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,  // 依容器高度繪製（避免字體被拉伸）
+        onClick: (evt, els) => {
+            if (!els.length) return;
+            const idx = els[0].index;
+            const ts = (summaryData[currentPond].timestamps || [])[idx];
+            if (!ts) return;
+            location.href = `/abnormal_detail/${encodeURIComponent(currentPond)}/${encodeURIComponent(ts)}`;
+        },
+        plugins: {
+            legend: {
+            labels: {
+                color:'#e8f6ff',
+                font:{ family:"'Segoe UI','Microsoft JhengHei',sans-serif", size:12 }
+            }
+            },
+            title: {
+            display:true,
+            text:'異常次數統計',
+            color:'#e8f6ff',
+            font:{ size:18, weight:'600', family:"'Segoe UI','Microsoft JhengHei',sans-serif" }
+            }
+        },
+        scales: {
+            x: {
+            type: 'category',
+            grid: { color:'#444' },
+            title:{ display:true, text:'時間（小時）', color:'#e8f6ff' },
+            ticks: {
+                color:'#e8f6ff',
+                font:{ size:11 },
+                maxRotation: 0,          // ★ 不旋轉
+                minRotation: 0,
+                autoSkip: false,         // ★ 交由 callback 控制
+                callback: function(value, index /*, ticks */) {
+                // 只顯示每 2 個刻度（要更疏改成 index % 3 !== 0）
+                if (index % 2 !== 0) return '';
+                const label = (typeof value === 'string')
+                    ? value
+                    : this.getLabelForValue(value);
+                // 將 "MM/DD HH:00" 切成兩行
+                return label.replace(' ', '\n');
+                }
+            }
+            },
+            y: {
+            beginAtZero:true,
+            ticks:{ color:'#e8f6ff', font:{ size:12 } },
+            grid:{ color:'#444' },
+            title:{ display:true, text:'異常次數', color:'#e8f6ff' }
+            }
+        }
+        }
+    });
+
+    function fmtHourLabel(ts){
+        const d = new Date(ts);
+        const m = String(d.getMonth()+1).padStart(2,'0');
+        const day = String(d.getDate()).padStart(2,'0');
+        const hh = String(d.getHours()).padStart(2,'0');
+        // 先用空白分隔，ticks.callback 會把空白換成換行
+        return `${m}/${day} ${hh}:00`;
+    }
+
+    function updateChart(){
+        if (!currentPond) return;
+        const obj = summaryData[currentPond] || { timestamps:[], abnormal_counts:[] };
+        const labels = (obj.timestamps || []).map(ts => fmtHourLabel(ts));
+        const data = obj.abnormal_counts || [];
+        abnormalChart.data.labels = labels;
+        abnormalChart.data.datasets[0].data = data;
+        abnormalChart.update();
+    }
+
+    pondSelector.addEventListener('change', ()=>{
+        currentPond = pondSelector.value;
+        updateChart();
+    });
+
+    // 初始化
+    updateChart();
+
+    // 右側兩項目：目前只顯示占位值（60:00 與 0 次）
+    // 未來接入時：
+    // - 殘料倒數：在「發放飼料」事件（含時間戳）後，倒數 3600 秒 -> 顯示 mm:ss
+    // - 翻身次數：接影像辨識累計 API（近 1 小時），>=3 次時可改變字色或背景提示
+    </script>
+
+</body>
+</html>

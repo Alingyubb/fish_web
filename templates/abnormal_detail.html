@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ pond_id }} - {{ timestamp }} 異常詳細資料</title>
+    <style>
+        body {
+            background-color: #1e1e2f;
+            color: #fff;
+            font-family: 'Microsoft JhengHei', sans-serif;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #ffcc00;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #2c2c3c;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #555;
+            text-align: center;
+        }
+
+        .abnormal {
+            color: red;
+            font-weight: bold;
+        }
+
+        .back-link {
+            margin-top: 20px;
+            display: inline-block;
+            color: #00bcd4;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ pond_id }} - {{ timestamp }} 異常資料</h1>
+
+    <table>
+        <thead>
+            <tr>
+                <th>時間</th>
+                <th>水溫 (°C)</th>
+                <th>鹽度 (PSU)</th>
+                <th>pH</th>
+                <th>溶氧 (mg/L)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td>{{ row.timestamp }}</td>
+                <td class="{{ 'abnormal' if row.temperature < 20 or row.temperature > 28 else '' }}">{{ row.temperature }}</td>
+                <td class="{{ 'abnormal' if row.salinity < 0 or row.salinity > 10 else '' }}">{{ row.salinity }}</td>
+                <td class="{{ 'abnormal' if row.ph < 6.5 or row.ph > 9 else '' }}">{{ row.ph }}</td>
+                <td class="{{ 'abnormal' if row.do_level < 5 else '' }}">{{ row.do_level }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a class="back-link" href="/abnormal_summary">← 返回異常摘要</a>
+</body>
+</html>
